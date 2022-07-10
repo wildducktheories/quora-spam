@@ -257,91 +257,91 @@ _filter() {
 
 _ju() {
     _from() {
-      _keys() {
-        local default=${1:-null}
-        jq -Rsc --argjson default "$default" '
-          rtrimstr("\n")
-          |split("\n")
-          |[
-            .[]|{"key": ., "value": $default}
-           ]
-          |from_entries'
-      }
-
-      dispatch "$@"
-    }
-
-    _func() {
-      _jsonify()
-      {
-         echo 'def jsonify: . as $in|try fromjson catch $in;'
-      }
-
-      _escape() {
-        echo 'def escape: if type == "string" and contains("\n") then tojson else tostring end;'
-      }
-
-      dispatch "$@"
-    }
-
-    _from() {
-
-      _keys() {
-        local default=${1:-null}
-        jq -Rsc --argjson default "$default" '
-          rtrimstr("\n")
-          |split("\n")
-          |[
-            .[]|{"key": ., "value": $default}
-           ]
-          |from_entries'
-      }
-
-      _ktv() {
-        jq -Rc 'split("\t")' \
-        | _from unblocked '.next|length==0' '[]' \
-        | jq -c "$(_func jsonify)"'
-            map(
-              map(jsonify)
-              |(.[0]|=tostring)
-              |{"key":.[0], "value":.[1]}
-            )
+        _keys() {
+          local default=${1:-null}
+          jq -Rsc --argjson default "$default" '
+            rtrimstr("\n")
+            |split("\n")
+            |[
+              .[]|{"key": ., "value": $default}
+             ]
             |from_entries'
+        }
+
+        dispatch "$@"
       }
 
-      _tsv() {
-        jq -Rsc \
-          "$(_func jsonify)"'
-           rtrimstr("\n")
-           |split("\n")
-           |map(split("\t"))
-           |.[0] as $header
-           |.[1:] as $data
-           |$data[]
-           |. as $in
-           |[
-              foreach $header[] as $k
-              (0; .+1; {"key": $k, "value": ($in[.-1]|jsonify)})
-            ]
-           |from_entries'
+      _func() {
+        _jsonify()
+        {
+           echo 'def jsonify: . as $in|try fromjson catch $in;'
+        }
+
+        _escape() {
+          echo 'def escape: if type == "string" and contains("\n") then tojson else tostring end;'
+        }
+
+        dispatch "$@"
       }
 
-      _unblocked() {
-        local eob=$1
-        local eob_value=${2:-null}
+      _from() {
 
-        jq -c --argjson eob_value "$eob_value" "def eob: $eob;"'
-          {"next": ., "output": []}
-          |until(
-            eob;
-            .output=(.output+[.next])
-            |.next=try input catch $eob_value
-          )|.output
-        '
+        _keys() {
+          local default=${1:-null}
+          jq -Rsc --argjson default "$default" '
+            rtrimstr("\n")
+            |split("\n")
+            |[
+              .[]|{"key": ., "value": $default}
+             ]
+            |from_entries'
+        }
 
-      }
+        _ktv() {
+          jq -Rc 'split("\t")' \
+          | _from unblocked '.next|length==0' '[]' \
+          | jq -c "$(_func jsonify)"'
+              map(
+                map(jsonify)
+                |(.[0]|=tostring)
+                |{"key":.[0], "value":.[1]}
+              )
+              |from_entries'
+        }
 
-      dispatch "$@"
+        _tsv() {
+          jq -Rsc \
+            "$(_func jsonify)"'
+             rtrimstr("\n")
+             |split("\n")
+             |map(split("\t"))
+             |.[0] as $header
+             |.[1:] as $data
+             |$data[]
+             |. as $in
+             |[
+                foreach $header[] as $k
+                (0; .+1; {"key": $k, "value": ($in[.-1]|jsonify)})
+              ]
+             |from_entries'
+        }
+
+        _unblocked() {
+          local eob=$1
+          local eob_value=${2:-null}
+
+          jq -c --argjson eob_value "$eob_value" "def eob: $eob;"'
+            {"next": ., "output": []}
+            |until(
+              eob;
+              .output=(.output+[.next])
+              |.next=try input catch $eob_value
+            )|.output
+          '
+
+        }
+
+        dispatch "$@"
     }
 
     _jsonify() {
@@ -593,14 +593,14 @@ _query() {
 }
 
 _require() {
-  _dotfiles() {
-    if ! test -d "${QUORA_DOTFILES}"; then
-      mkdir -p ${QUORA_DOTFILES}
-      chmod 2700 ${QUORA_DOTFILES}
-    fi
-  }
+    _dotfiles() {
+      if ! test -d "${QUORA_DOTFILES}"; then
+        mkdir -p ${QUORA_DOTFILES}
+        chmod 2700 ${QUORA_DOTFILES}
+      fi
+    }
 
-  dispatch "$@"
+    dispatch "$@"
 }
 
 _report() {
