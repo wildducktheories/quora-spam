@@ -238,7 +238,7 @@ _filter() {
         | jq -r .
     }
 
-    _profiles() {
+    _simple-notifications() {
       jq -c '
           .data.viewer.sentNotifCollectionsConnection.edges[].node
           |{
@@ -584,8 +584,8 @@ _query() {
           | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
     }
 
-    _profiles() {
-        _upvotes | _filter profiles
+    _simple-notifications() {
+        _upvotes | _filter simple-notifications
     }
 
     _simple-profile()  {
@@ -598,7 +598,7 @@ _query() {
     }
 
     _simple-profiles() {
-        _profiles | _filter simple-profiles
+        _simple-notifications | _filter simple-profiles
     }
 
     _sweet-hot-girls() {
