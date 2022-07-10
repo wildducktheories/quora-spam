@@ -15,35 +15,6 @@ dispatch () {
     "$@"
 }
 
-_usage() {
-    cat 1>&2 <<EOF
-$(basename ${BASH_SOURCE[0]}) cmd args...
-    cookies
-
-    filter {filter}
-      profiles
-      simpler_profile
-      simpler-profiles
-      sweet-hot-girls
-
-    login
-
-    post
-      mute {id}
-      report {id}
-      markAsRead {sncid}
-
-    query {source}
-      profile {profileId|profileUrl}
-      simple-profile {profileId|profileUrl}
-      simple-profiles
-      sweet-hot-girls
-      upvotes
-
-    report {report-type}
-      sweet-hot-girls
-EOF
-}
 
 _cookies() {
     if test -z "$QUORA_COOKIE"; then
@@ -158,6 +129,10 @@ _har() {
   dispatch "$@"
 }
 
+_help() {
+  grep "^ *_[^ ]*(" quora-spam | tr -d '(){' | sed "s/ *\$//" | sed 's/\( *\)_/\1/'
+}
+
 _install() {
   pre_reqs="jq curl make docker"
   _Darwin() {
@@ -242,10 +217,10 @@ _filter() {
       jq -c '
           .data.viewer.sentNotifCollectionsConnection.edges[].node
           |{
+              "sncid": .sncid,
               "uid": (.responsibleUser.uid|tostring),
               "profileUrl": .userImageUser.profileUrl,
               "isSpam": false,
-              "sncid": .sncid,
               "isRead": .isRead
           }'
     }
@@ -659,15 +634,15 @@ _shell() {
 }
 
 _to() {
-  _curl-header-args() {
-    eval "_=$(quora-spam template header /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation | jq 'to_entries[]|"-H "+((.key+" "+.value)|tojson)' -r | tr \\012 ' ' | sed "s/.*/(&)/")"
-    echo "${_[@]}"
-  }
-  dispatch "$@"
+    _curl-header-args() {
+      eval "_=$(quora-spam template header /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation | jq 'to_entries[]|"-H "+((.key+" "+.value)|tojson)' -r | tr \\012 ' ' | sed "s/.*/(&)/")"
+      echo "${_[@]}"
+    }
+    dispatch "$@"
 }
 
 _template() {
-  _header() {
+    _header() {
     jq <<EOF
 {
   "/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation": {
@@ -749,9 +724,9 @@ _template() {
 }
 EOF
 
-  }
+    }
 
-  _body() {
+    _body() {
     jq <<EOF
 {
   "/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation": {
@@ -796,18 +771,25 @@ EOF
   }
 }
 EOF
-  }
+    }
 
-  local type=$1
-  local path=$2
-  local expr="jq -r 'to_entries[]|.key';"
+    local type=$1
+    local path=$2
+    local expr="jq -r 'to_entries[]|.key';"
 
-  test -n "$type" || die "usage: template {type} [{path}]}"
+    test -n "$type" || die "usage: template {type} [{path}]}"
 
-  if test -n "$path"; then
-    expr="jq --arg path "$path" '.[\$path]';"
-  fi
-  dispatch "$type" | eval "$expr"
+    if test -n "$path"; then
+      expr="jq --arg path "$path" '.[\$path]';"
+    fi
+    dispatch "$type" | eval "$expr"
+}
+
+_usage() {
+    cat 1>&2 <<EOF
+$(basename ${BASH_SOURCE[0]}) cmd args...
+$(_help | sed "s/^/   /")
+EOF
 }
 
 _version() {
