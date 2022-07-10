@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export QUORA_SPAM_VERSION=v1.1-pre
 export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
 
 die() {
@@ -810,7 +811,7 @@ EOF
 }
 
 _version() {
-  echo "v1.0"
+  echo "${QUORA_SPAM_VERSION}"
 }
 
 _cookies >/dev/null
