@@ -242,7 +242,7 @@ _filter() {
       jq -c '
           .data.viewer.sentNotifCollectionsConnection.edges[].node
           |{
-              "id": (.responsibleUser.uid|tostring),
+              "uid": (.responsibleUser.uid|tostring),
               "profileUrl": .userImageUser.profileUrl,
               "isSpam": false,
               "sncid": .sncid,
@@ -261,7 +261,7 @@ _filter() {
     # converts a full profile into a simple profile
     _full-to-simple-profile() {
       jq -c '{
-        "id": .data.user.uid,
+        "uid": .data.user.uid,
         "profileUrl":.data.user.profileUrl,
         "isBlockedByViewer": .data.user.isBlockedByViewer,
         "viewerHasMuted": .data.user.viewerHasMuted,
@@ -470,11 +470,11 @@ _ju() {
 
 _post() {
     _mute() {
-        local id=$1
+        local uid=$1
 
         local data="$(
           _template body /graphql/gql_POST?q=UserMute_userMute_Mutation | \
-          jq -c --argjson id "$id" '.variables.uid=$id'
+          jq -c --argjson uid "$uid" '.variables.uid=$uid'
         )"
 
         _curl POST '/graphql/gql_POST?q=UserMute_userMute_Mutation' \
@@ -485,26 +485,26 @@ _post() {
           -H 'sec-fetch-mode: cors' \
           -H 'sec-fetch-site: same-origin' \
           --data-raw "$data" \
-          | jq -c --arg id "$id" '
+          | jq -c --arg uid "$uid" '
                 {
-                    "id": $id,
+                    "uid": $uid,
                     "viewerHasMuted": .data.userMute.user.viewerHasMuted
                 }'
     }
 
     _report() {
-        local id=$1
+        local uid=$1
         shift 1
         message="$*"
         message="${message:-Spammy link in profile.}"
 
         local data=$(
           _template body /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation \
-          | jq -c --arg message "$message" --argjson id "$id" '
+          | jq -c --arg message "$message" --argjson uid "$uid" '
             .variables.comment|=fromjson
             |.variables.comment.sections[0].spans[0].text|=$message
             |.variables.comment|=tojson
-            |.variables.reportableId=$id
+            |.variables.reportableId=$uid
         ')
 
         _curl POST '/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation' \
@@ -515,12 +515,12 @@ _post() {
           -H 'sec-fetch-mode: cors' \
           -H 'sec-fetch-site: same-origin' \
           --data-raw "$data" \
-          | jq -c --arg id "$id" '{
-               "id": $id,
+          | jq -c --arg uid "$uid" '{
+               "uid": $uid,
                "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
           }'
 
-        _mute "$id"
+        _mute "$uid"
     }
 
     _markAsRead() {
@@ -632,7 +632,7 @@ _report() {
     _sweet-hot-girls() {
         while read -r profile; do
             (
-                eval "$(echo "$profile" | _ju pipe 'select id,isBlockedByViewer,viewerHasMuted,isRead,sncid|to env')"
+                eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid|to env')"
                 if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
                   continue
                 fi
@@ -641,9 +641,9 @@ _report() {
                   _post markAsRead "$sncid"
                 fi
                 if test "$isBlockedByViewer" = "false"; then
-                  _post report "$id" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
+                  _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
                 elif test "$viewerHasMuted" = "false"; then
-                  _post mute "$id"
+                  _post mute "$uid"
                 fi
             ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
             sleep 5;
