@@ -540,13 +540,6 @@ _process() {
 
 _query() {
 
-    _followers() {
-      local profile=${1#/profile/}
-      _curl GET "/profile/$profile/followers" \
-      | _filter html \
-      | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
-    }
-
     _profile() {
         local profile=${1#/profile/}
         _curl GET '/profile/'$profile \
@@ -557,6 +550,20 @@ _query() {
           -L \
           | _filter html \
           | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
+    }
+
+    _simple-followers() {
+        local profile=$1
+
+        if test -z "$profile"; then
+          profile=$(_self | jq -r .profileUrl)
+        fi
+        profile=${profile#/profile/}
+
+        _curl GET "/profile/$profile/followers" \
+        | _filter html \
+        | jq '.data.user.followerUsersConnection.edges[]|.node' \
+        | _ju select uid,profileUrl,isBlockedByViewer
     }
 
     _simple-notifications() {
