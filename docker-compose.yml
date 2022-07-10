@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  quora-spam:
+    build:
+      context: .
+    image: wildducktheories/quora-spam:latest
+    volumes:
+      - ~/.quora-spam:/home/quora-spam/.quora-spam
+      - ./:/home/quora-spam/host
+
+  privileged:
+    build:
+      context: .
+    image: wildducktheories/quora-spam:latest
+    command: shell
+    user: root
+    privileged: true
+    volumes:
+      - ~/.quora-spam:/home/quora-spam/.quora-spam
+      - ./:/home/quora-spam/host
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -1,0 +1,821 @@
+#!/bin/bash
+
+export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
+
+die() {
+    echo -e "fatal: $*" 1>&2
+    exit ${DIE_RC:-1}
+}
+
+dispatch () {
+    local cmd=$1
+    shift 1
+    set -- "_$cmd" "$@"
+    "$@"
+}
+
+_usage() {
+    cat 1>&2 <<EOF
+$(basename ${BASH_SOURCE[0]}) cmd args...
+    cookies
+
+    filter {filter}
+      profiles
+      simpler_profile
+      simpler-profiles
+      sweet-hot-girls
+
+    login
+
+    post
+      mute {id}
+      report {id}
+      markAsRead {sncid}
+
+    query {source}
+      profile {profileId|profileUrl}
+      simple-profile {profileId|profileUrl}
+      simple-profiles
+      sweet-hot-girls
+      upvotes
+
+    report {report-type}
+      sweet-hot-girls
+EOF
+}
+
+_cookies() {
+    if test -z "$QUORA_COOKIE"; then
+      export QUORA_COOKIE=$(test -f "$QUORA_DOTFILES/cookie" && cat "$QUORA_DOTFILES/cookie")
+    fi
+    echo "$QUORA_COOKIE"
+}
+
+_curl() {
+    local method=$1
+    local path=$2
+    shift 2
+
+    local cookie=$(_cookies)
+    test -n "$cookie" || die "not logged in"
+
+    set -- "$@" \
+        -s \
+        --compressed \
+        -H 'authority: www.quora.com' \
+        -H 'accept: */*' \
+        -H 'quora-canary-revision: false' \
+        -H 'quora-formkey: Ceenap3Bahkeineiyai8bei0iNoowaiF' \
+        -H 'accept-language: en-AU,en;q=0.9,en-US;q=0.8' \
+        -H "cookie: $cookie" \
+        -H 'origin: https://www.quora.com' \
+        -H 'sec-ch-ua: ".Not/A)Brand";v="99", "Google Chrome";v="103", "Chromium";v="103"' \
+        -H 'sec-ch-ua-mobile: ?0' \
+        -H 'sec-ch-ua-platform: "macOS"' \
+        -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36' \
+
+    case "$method" in
+      GET)
+          set -- "$@" \
+            -H 'cache-control: max-age=0' \
+            -H 'upgrade-insecure-requests: 1'
+      ;;
+      PUT|POST)
+          set -- "$@" -H 'content-type: application/json'
+      ;;
+    esac
+
+    curl "$@" "https://www.quora.com$path"
+}
+
+_har() {
+  _cookie() {
+    jq -r '
+      [.log.entries[].request
+      |select(.url|startswith("https://www.quora.com/"))
+      |.headers[]
+      |select(.name=="cookie")
+      |.value][-1]'
+  }
+  _headers() {
+    jq '
+      [
+        .log.entries[].request
+        |select(.url|startswith("https://www.quora.com/"))
+        |
+          [.headers[]|.key=.name]
+          |from_entries
+          |.[":path"] as $path
+          |with_entries(
+            if
+              (.key|startswith(":"))
+              or (.key==("content-length"))
+              or (.key==("referer")
+              or (.key=="cookie"))
+            then
+              empty
+            else
+              .
+            end
+          ) as $headers
+        |{
+            "key": $path,
+            "value": $headers
+        }
+      ]
+      |from_entries'
+  }
+  _bodies() {
+    jq '
+      [
+        .log.entries[].request
+        |select(.url|startswith("https://www.quora.com/"))
+        |([.headers[]|.key=.name]|from_entries) as $headers
+        |$headers[":path"] as $path
+        |select($path|ascii_downcase|contains("facebook")|not)
+        |select(.postData.mimeType=="application/json")
+        |(.postData.text|fromjson) as $body
+        |{
+            "key": $path,
+            "value": $body
+        }
+      ]
+      |from_entries'
+  }
+
+  _save() {
+    _require dotfiles
+    (
+      umask 077
+      cat > ${QUORA_DOTFILES}/har &&
+      _cookie < $QUORA_DOTFILES/har > $QUORA_DOTFILES/cookie &&
+      _headers< $QUORA_DOTFILES/har > $QUORA_DOTFILES/headers &&
+      _bodies < $QUORA_DOTFILES/har > $QUORA_DOTFILES/bodies
+    )
+  }
+
+  dispatch "$@"
+}
+
+_install() {
+  pre_reqs="jq curl make docker"
+  _Darwin() {
+    set --
+    for c in $pre_reqs; do
+      if !command -v $c >/dev/null 2>&1; then
+        set -- "$@" "$c"
+      fi
+    done
+    if test $# -gt 0; then
+      brew install "$@"
+    fi
+  }
+
+  _default() {
+    _pre-reqs() {
+      rc=0
+      for c in $pre_reqs; do
+        if ! command -v "$c" >/dev/null 2>&1; then
+          echo "please install $c" 1>&2
+        fi
+      done
+      test $rc -eq 0 || die "some pre-requisites missing"
+    }
+  }
+
+  if test -z "$1"; then
+    set -- "pre-reqs" "$@"
+  fi
+
+  cmd=$(uname)
+  if test "$(type -t _$cmd)" != "function"; then
+    cmd=default
+  fi
+  dispatch "$cmd" "$@"
+}
+
+_login() {
+  local cookie=$(_cookies)
+  if test -z "$cookie"; then
+    die "not logged in\n\nrun:\n\n  'pbpaste | $(basename ${BASH_SOURCE[0]}) har save'\n\nor:\n\n  '$(basename ${BASH_SOURCE[0]}) har save < saved.har'\n\nwith the contents of a web browser HAR file to extract credentials.\n" 1>&2
+  fi
+  echo "starting quora-spam (qs) shell. exit to logout" 1>&2
+  (_shell)
+  local rc=$?
+  _logout
+  echo "logged out." 1>&2
+  return $rc
+}
+
+_logout() {
+  if test -d ${QUORA_DOTFILES}; then
+    rm -f "${QUORA_DOTFILES}/cookie"
+    rm -f "${QUORA_DOTFILES}/har"
+    rm -f "${QUORA_DOTFILES}/headers"
+    rm -f "${QUORA_DOTFILES}/bodies"
+    rm -f "${QUORA_DOTFILES}/self"
+  fi
+}
+
+_loop() {
+    LOOP_DELAY=${LOOP_DELAY:-900}
+    while true; do
+      echo -n "$(date)...processing..." 1>&2
+      dispatch "$@"
+      echo -n "sleeping..." 1>&2
+      sleep $LOOP_DELAY
+      echo "" 1>&2
+    done
+}
+
+_filter() {
+    _html() {
+        grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
+        | tail -1 \
+        | sed "s/;\$//" \
+        | sed "s/^[^=]*= //" \
+        | jq -r .
+    }
+
+    _profiles() {
+      jq -c '
+          .data.viewer.sentNotifCollectionsConnection.edges[].node
+          |{
+              "id": (.responsibleUser.uid|tostring),
+              "profileUrl": .userImageUser.profileUrl,
+              "isSpam": false,
+              "sncid": .sncid,
+              "isRead": .isRead
+          }'
+    }
+
+    _simple-profiles() {
+        jq -c . \
+        | while read profile; do
+            eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
+            jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
+        done
+    }
+
+    # converts a full profile into a simple profile
+    _full-to-simple-profile() {
+      jq -c '{
+        "id": .data.user.uid,
+        "profileUrl":.data.user.profileUrl,
+        "isBlockedByViewer": .data.user.isBlockedByViewer,
+        "viewerHasMuted": .data.user.viewerHasMuted,
+        "isSpam": false,
+        "links": [
+            .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
+            |select(.modifiers.link!=null)|.text
+         ]
+      }'
+    }
+
+    _sweet-hot-girls() {
+        jq -c 'select(.links|any(contains("sweethotgirls")))|.isSpam=true'
+    }
+
+    dispatch "$@"
+}
+
+_ju() {
+    _from() {
+      _keys() {
+        local default=${1:-null}
+        jq -Rsc --argjson default "$default" '
+          rtrimstr("\n")
+          |split("\n")
+          |[
+            .[]|{"key": ., "value": $default}
+           ]
+          |from_entries'
+      }
+
+      dispatch "$@"
+    }
+
+    _func() {
+      _jsonify()
+      {
+         echo 'def jsonify: . as $in|try fromjson catch $in;'
+      }
+
+      _escape() {
+        echo 'def escape: if type == "string" and contains("\n") then tojson else tostring end;'
+      }
+
+      dispatch "$@"
+    }
+
+    _from() {
+
+      _keys() {
+        local default=${1:-null}
+        jq -Rsc --argjson default "$default" '
+          rtrimstr("\n")
+          |split("\n")
+          |[
+            .[]|{"key": ., "value": $default}
+           ]
+          |from_entries'
+      }
+
+      _ktv() {
+        jq -Rc 'split("\t")' \
+        | _from unblocked '.next|length==0' '[]' \
+        | jq -c "$(_func jsonify)"'
+            map(
+              map(jsonify)
+              |(.[0]|=tostring)
+              |{"key":.[0], "value":.[1]}
+            )
+            |from_entries'
+      }
+
+      _tsv() {
+        jq -Rsc \
+          "$(_func jsonify)"'
+           rtrimstr("\n")
+           |split("\n")
+           |map(split("\t"))
+           |.[0] as $header
+           |.[1:] as $data
+           |$data[]
+           |. as $in
+           |[
+              foreach $header[] as $k
+              (0; .+1; {"key": $k, "value": ($in[.-1]|jsonify)})
+            ]
+           |from_entries'
+      }
+
+      _unblocked() {
+        local eob=$1
+        local eob_value=${2:-null}
+
+        jq -c --argjson eob_value "$eob_value" "def eob: $eob;"'
+          {"next": ., "output": []}
+          |until(
+            eob;
+            .output=(.output+[.next])
+            |.next=try input catch $eob_value
+          )|.output
+        '
+
+      }
+
+      dispatch "$@"
+    }
+
+    _jsonify() {
+       sed 's/^ *//;s/ *\$//' | jq -Rc "$(_func jsonify) jsonify"
+    }
+
+    _object() {
+        DEFAULT=$(
+          while test $# -gt 0; do
+            local key_value=$1
+            shift
+            if test "$key_value" = --; then
+              echo "$1"
+              return
+            fi
+          done | _jsonify
+        )
+
+        escape() {
+          local v="$1"
+          if test "${v/$'\n'}" != "$v"; then
+            v=$(echo -n "$v" | jq -Rs .)
+          fi
+          echo "$v"
+        }
+
+        local tab=$'\t'
+
+        (while test $# -gt 0; do
+          local key_value="$1"
+          shift
+          if test "$key_value" = --; then
+            break
+          fi
+          key=${key_value%%:*}
+          if test "$key" = "$key_value"; then
+            value=null
+          else
+            value=${key_value#*:}
+          fi
+          echo "$(escape "$key")${tab}$(escape "$value")"
+        done; echo "") | _from ktv | jq -c --argjson default "${DEFAULT:-null}" 'with_entries(if .value == null then .value=$default else . end)'
+
+    }
+
+    _o() {
+      _object "$@"
+    }
+
+    _pipe() {
+      local pipe=$1
+      pipe=$(echo "$pipe" | sed "s/^ */_/;s/| */|_/g")
+      eval "$pipe"
+    }
+
+    _select() {
+      local selector=$1
+      local map=$(jq -nr "$(_selector "$selector")|.[]" | _from keys "$default")
+      jq -c --argjson map "$map" '[to_entries[]|select(.key|in($map))]|from_entries'
+    }
+
+    _selector() {
+      local selector=$1
+      if test "${selector#[}" != "$selector"; then
+        echo "$selector" | _jsonify | jq -c .
+      else
+        (
+          IFS=,;
+          set -- $selector
+          while test $# -gt 0; do
+            echo "$1"
+            shift
+          done | _jsonify | jq -sc .
+        )
+      fi
+    }
+
+    _to() {
+        _env() {
+            jq -r 'to_entries|map(.key+"="+(
+              if .value == null then
+                ""
+              elif (.value|type|(. == "object") or (. == "array"))
+              then
+                "'\''"+(.value|tojson)+"'\''"
+              else
+                .value|tojson
+              end
+              )+";"
+            )[]'
+        }
+
+        _keys() {
+            jq -cr 'select(type == "object")|[to_entries[].key|tostring]|join("\t")'
+        }
+
+        dispatch "$@"
+    }
+    dispatch "$@"
+}
+
+_post() {
+    _mute() {
+        local id=$1
+
+        local data="$(
+          _template body /graphql/gql_POST?q=UserMute_userMute_Mutation | \
+          jq -c --argjson id "$id" '.variables.uid=$id'
+        )"
+
+        _curl POST '/graphql/gql_POST?q=UserMute_userMute_Mutation' \
+          -H 'quora-broadcast-id: main-w-chan49-8888-react_nvopajbxntwjsdtn-8poq' \
+          -H 'quora-revision: b8405a23e662549e278d2a571c91cf44505b3cab' \
+          -H 'quora-window-id: react_nvopajbxntwjsdtn' \
+          -H 'sec-fetch-dest: empty' \
+          -H 'sec-fetch-mode: cors' \
+          -H 'sec-fetch-site: same-origin' \
+          --data-raw "$data" \
+          | jq -c --arg id "$id" '
+                {
+                    "id": $id,
+                    "viewerHasMuted": .data.userMute.user.viewerHasMuted
+                }'
+    }
+
+    _report() {
+        local id=$1
+        shift 1
+        message="$*"
+        message="${message:-Spammy link in profile.}"
+
+        local data=$(
+          _template body /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation \
+          | jq -c --arg message "$message" --argjson id "$id" '
+            .variables.comment|=fromjson
+            |.variables.comment.sections[0].spans[0].text|=$message
+            |.variables.comment|=tojson
+            |.variables.reportableId=$id
+        ')
+
+        _curl POST '/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation' \
+          -H 'quora-broadcast-id: main-w-chan50-8888-react_hcftjklsctnkbkky-axVB' \
+          -H 'quora-revision: 9f36e69ebb7b3fcbeaf98ea02b31200923276eae' \
+          -H 'quora-window-id: react_hcftjklsctnkbkky' \
+          -H 'sec-fetch-dest: empty' \
+          -H 'sec-fetch-mode: cors' \
+          -H 'sec-fetch-site: same-origin' \
+          --data-raw "$data" \
+          | jq -c --arg id "$id" '{
+               "id": $id,
+               "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
+          }'
+
+        _mute "$id"
+    }
+
+    _markAsRead() {
+      local sncid="$1"
+      local data=$(jq -nc --argjson sncid "$sncid" '{
+        "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
+        "extensions":{
+          "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
+        },
+        "variables":{
+          "sncid":$sncid,
+          "source":"notif_page",
+          "shouldLogClick":true
+        }
+      }')
+      _curl POST '/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation' \
+        -H 'quora-broadcast-id: main-w-chan51-8888-react_yllqzbpigkowdnch-eAYX' \
+        -H 'quora-revision: 5e170308ddecf765200201715bdae6c9d1fa78f1' \
+        -H 'quora-window-id: react_yllqzbpigkowdnch' \
+        -H 'referer: https://www.quora.com/notifications/upvotes' \
+        -H 'sec-fetch-dest: empty' \
+        -H 'sec-fetch-mode: cors' \
+        -H 'sec-fetch-site: same-origin' \
+        --data-raw "$data" \
+        | jq -c --argjson sncid "$sncid" '
+        {
+            "sncid": $sncid,
+            "isRead": .data.markSentNotifCollectionAsRead.sentNotifCollection.isRead
+        }'
+
+    }
+
+    dispatch "$@"
+}
+
+_process() {
+    local selector=$1
+
+    test -n "$selector" || die "process {selector}"
+    _query "$selector" | _report "$selector"
+}
+
+_query() {
+
+    _followers() {
+      local profile=${1#/profile/}
+      _curl GET "/profile/$profile/followers" \
+      | _filter html \
+      | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
+    }
+
+    _profile() {
+        local profile=${1#/profile/}
+        _curl GET '/profile/'$profile \
+          -H 'sec-fetch-dest: document' \
+          -H 'sec-fetch-mode: navigate' \
+          -H 'sec-fetch-site: none' \
+          -H 'sec-fetch-user: ?1' \
+          -L \
+          | _filter html \
+          | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
+    }
+
+    _profiles() {
+        _upvotes | _filter profiles
+    }
+
+    _simple-profile()  {
+        local profile=${1#/profile/}
+        _profile "$profile" | _filter full-to-simple-profile
+    }
+
+    _self() {
+        _profile | _filter full-to-simple-profile
+    }
+
+    _simple-profiles() {
+        _profiles | _filter simple-profiles
+    }
+
+    _sweet-hot-girls() {
+        _simple-profiles | _filter sweet-hot-girls
+    }
+
+    _upvotes() {
+        _curl GET '/notifications/upvotes' \
+            -H 'sec-fetch-dest: document' \
+            -H 'sec-fetch-mode: navigate' \
+            -H 'sec-fetch-site: none' \
+            -H 'sec-fetch-user: ?1' \
+        | _filter html
+    }
+
+    dispatch "$@"
+}
+
+_require() {
+  _dotfiles() {
+    if ! test -d "${QUORA_DOTFILES}"; then
+      mkdir -p ${QUORA_DOTFILES}
+      chmod 2700 ${QUORA_DOTFILES}
+    fi
+  }
+
+  dispatch "$@"
+}
+
+_report() {
+    _sweet-hot-girls() {
+        while read -r profile; do
+            (
+                eval "$(echo "$profile" | _ju pipe 'select id,isBlockedByViewer,viewerHasMuted,isRead,sncid|to env')"
+                if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
+                  continue
+                fi
+                echo "$profile"
+                if test "$isRead" = "false"; then
+                  _post markAsRead "$sncid"
+                fi
+                if test "$isBlockedByViewer" = "false"; then
+                  _post report "$id" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
+                elif test "$viewerHasMuted" = "false"; then
+                  _post mute "$id"
+                fi
+            ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
+            sleep 5;
+        done
+   }
+
+   jq -c 'select(.isSpam)' | dispatch "$@"
+}
+
+_shell() {
+    export PS1="\h:\W \u (qs)\$ "
+    ${SHELL:-bash}
+}
+
+_to() {
+  _curl-header-args() {
+    eval "_=$(quora-spam template header /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation | jq 'to_entries[]|"-H "+((.key+" "+.value)|tojson)' -r | tr \\012 ' ' | sed "s/.*/(&)/")"
+    echo "${_[@]}"
+  }
+  dispatch "$@"
+}
+
+_template() {
+  _header() {
+    jq <<EOF
+{
+  "/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan49-8888-react_wkdwbuxkvtsoehvq-Z01a",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "2c343221d5d11fd67f13b8ca8a09586831ccaba8",
+    "quora-window-id": "react_wkdwbuxkvtsoehvq",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
+    "quora-window-id": "react_kudnreowtdanpzoc",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/graphql/gql_POST?q=UserMute_userUnmute_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
+    "quora-window-id": "react_kudnreowtdanpzoc",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/graphql/gql_POST?q=UserMute_userMute_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
+    "quora-window-id": "react_kudnreowtdanpzoc",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  }
+}
+EOF
+
+  }
+
+  _body() {
+    jq <<EOF
+{
+  "/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation": {
+    "queryName": "ReportModalInner_reportAdd_Mutation",
+    "extensions": {
+      "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+    },
+    "variables": {
+      "reason": "spam",
+      "targetType": "user",
+      "reportableId": null,
+      "comment": "{\"sections\":[{\"type\":\"plain\",\"indent\":0,\"quoted\":false,\"is_rtl\":false,\"spans\":[{\"modifiers\":{},\"text\":\"\"}]}],\"caret\":{\"start\":{\"spanIdx\":0,\"sectionIdx\":0,\"offset\":59},\"end\":{\"spanIdx\":0,\"sectionIdx\":0,\"offset\":59}}}"
+    }
+  },
+  "/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation": {
+    "queryName": "userBlockModalInnerUtils_userSetBlock_Mutation",
+    "extensions": {
+      "hash": "fc7232c06fc858107eba5ff2469a96639fc5834eb503cb2d1db2793e89770527"
+    },
+    "variables": {
+      "targetUid": null,
+      "shouldBlock": true
+    }
+  },
+  "/graphql/gql_POST?q=UserMute_userUnmute_Mutation": {
+    "queryName": "UserMute_userUnmute_Mutation",
+    "extensions": {
+      "hash": "1ce4545a2324134e189c8d58b835372738c5cb0fbc14e348bac9d69f5c3312bd"
+    },
+    "variables": {
+      "uid": null
+    }
+  },
+  "/graphql/gql_POST?q=UserMute_userMute_Mutation": {
+    "queryName": "UserMute_userMute_Mutation",
+    "extensions": {
+      "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
+    },
+    "variables": {
+      "uid": null
+    }
+  }
+}
+EOF
+  }
+
+  local type=$1
+  local path=$2
+  local expr="jq -r 'to_entries[]|.key';"
+
+  test -n "$type" || die "usage: template {type} [{path}]}"
+
+  if test -n "$path"; then
+    expr="jq --arg path "$path" '.[\$path]';"
+  fi
+  dispatch "$type" | eval "$expr"
+}
+
+_version() {
+  echo "v1.0"
+}
+
+_cookies >/dev/null
+
+if test $# -eq 0; then
+    set -- usage
+fi
+dispatch "$@"
