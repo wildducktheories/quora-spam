@@ -3,30 +3,32 @@
 quora-spam - a tool for dealing with Quora upvote spam, one notification at a time
 
 # SYNOPSIS
-
-	pbpaste | quora-spam har save # Mac
-	quora-spam har save < saved.har # on platforms that don't have pbpaste
-	quora-spam login
-	quora-spam loop process sweet-hot-girls
-
+```sh
+pbpaste | quora-spam har save   # on OSX, or,
+quora-spam har save < saved.har # on other platforms that don't have pbpaste
+quora-spam login
+quora-spam loop process sweet-hot-girls
+```
 # DESCRIPTION
 
-In July 2022, a commercial spammer started generating large amounts of quora "upvote" spam that resulted in Quora authors being subjected to 10s of notifications each day containing upvotes from spammy profiles that contain deceptive "sweethotgirls" links that presumably link to a porn site or the promise of a porn site. It is unknown if the resources referenced by these links also contain malware, but based on the deceptive nature of the links themselves it is best to assume that they do.
+In July 2022, a spammer started generating large amounts of quora "upvote" spam that resulted in Quora authors being subjected to 10s of notifications each day containing upvotes from spammy profiles that contain deceptive "sweethotgirls" links that presumably link to a porn site or the promise of a porn site. It is unknown if the resources referenced by these links also contain malware but, based on the deceptive nature of the links themselves, it is best to assume that they do.
 
 The volume of such notifications makes reporting each and everyone of them quite tedious if done manually.
 
-I decided to automate the process of reporting this spam by reverse-engineering the Quora API calls required to identify, report mute and block spammy upvotes thereby making my life more pleasant.
+We decided to automate the process of reporting this spam by reverse-engineering the Quora API calls required to identify, report mute and block spammy upvotes thereby making our lives more pleasant.
 
-I am offering the tool to others who are annoyed by such spam, would like to report it, but don't appreciate hassle of doing so.
+We are offering the tool to others who are annoyed by such spam and who would like to report it, but don't appreciate the hassle of doing so.
 
 # INSTALLATION (MacOS, Linux)
 
 Running directly from a clone of the GitHub repo is probably the easiest way:
 
-	mkdir -p ~/git/wildducktheories &&
-	cd ~/git/wildducktheories &&
-	git clone git@github.com:wildducktheories/quora-spam.git quora-spam &&
-	cd quora-spam
+```sh
+mkdir -p ~/git/wildducktheories &&
+cd ~/git/wildducktheories &&
+git clone git@github.com:wildducktheories/quora-spam.git quora-spam &&
+cd quora-spam
+```
 
 If you want to run the quora-spam script locally, you should run this command to use brew to install the necessary pre-requisites.
 
@@ -40,8 +42,10 @@ If you only have a Windows machine, the easiest way to use this is to install [D
 
 # RUNNING (Mac, Linux)
 
-	quora-spam shell # locally
-	docker-compose run quora-spam shell #inside docker
+The following command sets up a shell which is always guaranteed to contain the necessary commands
+
+	./quora-spam shell                    # locally, or,
+	docker-compose run quora-spam shell # inside a docker container
 
 # RUNNING (Windows - Docker)
 
@@ -72,18 +76,18 @@ or, with docker-compose installed locally:
 
 	docker-compose run privileged
 
-Alternatively, if you know what you are doing you can install make, bash, jq and curl, make locally and run quora-spam in your local environment. If you discover something that doesn't work properly under Windows feel to submit a PR for my consideration.
+Alternatively, if you know what you are doing you can install `bash`, `jq`, `curl`, `make` locally and run `quora-spam` in your local environment. If you discover something that doesn't work properly under Windows feel to submit a PR for my consideration.
 
 # COMMANDS
 
-The quora-spam command is a wrapper for a large number of functions that can be used individually to achieve different ends. For the purposes of this document, I am going to describe commands that are enough to perform the basic spam reporting function.
+The `quora-spam` command is a wrapper for a large number of functions that can be used individually to achieve different ends. For the purposes of this document, we are going to describe the commands that are sufficient to perform the basic spam reporting function for the current sweet-hot-girls spam epidemic. If new variants emerge, we may release updates to deal with the variants.
 
 ## har save
 
 	pbpaste | quora-spam har save # or,
 	quora-spam har save < saved.har
 
-This command reads a HAR file from stdin. A HAR file is an archive of requests your browser has sent to the Internet. We need to analyze this file so that we can extract a cookie we need to login to Quora on your behalf.
+This command reads a HAR file from stdin. A HAR file is an archive of requests your browser has sent to and responses received from the Internet. We need to analyze this file so that we can extract the cookies we need to login to Quora on your behalf. See the SECURITY note, below.
 
 These instructions assume you are using Chrome as your browser. You can probably find information about similar tools for your browser of choice.
 
@@ -93,17 +97,17 @@ These instructions assume you are using Chrome as your browser. You can probably
 4. navigate to the "Network" tab of the devtools window and select a request to quora.com
 5. select "Copy > Copy all as HAR" from the context menu
 
-Your clipboard now contains a HAR which contains, amongst other things, cookies that can be used to login to Quora. Now run the quora-spam har save command with the contents of your clipboard.
+Your clipboard now contains a HAR which contains, amongst other things, cookies that can be used to login to Quora. Now run the `quora-spam har save` command with the contents of your clipboard piped to stdin.
 
-On OSX, you can run:
+For example, on OSX, you can run:
 
 	pbpaste | quora-spam har save
 
-on other operating systems you need to run a similar command to paste the contents of the clipboard to stdout or you need to save the clipboard to a file, say, `saved.har` then run:
+on other operating systems you need to run a similar command to paste the contents of the clipboard to stdout or you need to save the clipboard to a file (say: `saved.har`) and then run:
 
 	quora-spam har save < saved.har
 
-Now, you can run `quora-spam login`.
+Now, you can run `quora-spam login` to create a login shell that can be used to exercise the spam reporting functions.
 
 ## install pre-reqs
 
@@ -119,6 +123,8 @@ It checks the Quora cookies are available and then starts a new shell. Once this
 
 Remember to either delete or secure any other copy of the HAR file you might have saved.
 
+See the EXAMPLES section for what to do next.
+
 ## logout
 
 This command purges the files saved with `quora-spam har save` including the cookie file extracted from that file.
@@ -129,7 +135,9 @@ This command is also run automatically when the shell created by `quora-spam log
 
 This command loops every 15 minutes then runs the `process sweet-hot-girls` command. To run on a different schedule, say every 30 minutes, change the command to:
 
-	LOOP_DELAY=1800 quora-spam process sweet-hot-girls
+```sh
+LOOP_DELAY=1800 quora-spam process sweet-hot-girls
+```
 
 ## process sweet-hot-girls
 
@@ -141,29 +149,96 @@ This command is equivalent to:
 
 ## query self
 
-Generate a simplified profile record for the logged in user. This command can be used to test that your Quora cookies credentials have been captured correctly.
+Generate a simplified profile record for the logged in user.
+
+This command is mainly useful as a simple test that should always report the profile of the logged in user. If it doesn't work, something has probably gone wrong
+with the login process.
 
 ## query sweet-hot-girls
 
 Generates a list of upvote notifications that were generated by spammy sweet-hot-girls profiles.
 
-This command can be used to see which profiles `process sweet-hot-girls` would report without actually making those reports.
+This command can be used to see which profiles `quore-spam process sweet-hot-girls` would report without actually making those reports.
 
 ## report sweet-hot-girls
 
-Iterates over spammy upvote notifications and generates a report for each. Care is taken not make a report if the report has already been made. The profiles must also be marked with a true isSpam attribute which will generally only happen if the profile has been positively identified as spam
+Iterates over spammy upvote notifications read from stdin (for example, as generated by `quora-spam query sweet-hot-girls`) and files a spam report for each. Care is taken not make a report if the current user has already made a report. The profiles must also be marked with a true `isSpam` property which will generally only happen if the profile has been positively identified as spam by `quora-spam query sweet-hot-girls`
+
+# EXAMPLES
+
+Once you have logged in with `quora-spam login`, run:
+
+	quora-spam query sweet-hot-girls
+
+to analyse recent upvotes and find the ones that are sweethotgirls spam.
+
+To report these, run:
+
+	quora-spam query sweet-hot-girls | quora-spam report sweet-hot-girls
+
+or, more simply:
+
+	quora-spam process sweet-hot-girls
+
+To run the command repeatedly in a 15-minute loop, simply run:
+
+```sh
+quora-spam loop process sweet-hot-girls
+````
 
 # SECURITY
 
-This command makes use of a HAR file that contains sensitive cookies that are used to autheticate your browser's access to Quora. The `quora-spam` needs to use these credentials to perform spam reporting functions on your behalf. The `quora-spam`script DOES send these credentials back to quora.com, but does not send them anywhere else.
+This command makes use of a HAR file that contains sensitive cookies that are used to autheticate your browser's access to Quora (and perhaps other sites). The `quora-spam` command needs to use these cookies to perform spam reporting functions on your behalf. The `quora-spam` script DOES send these credentials back to quora.com, but does not send them anywhere else.
 
-However, if you cannot verify the `quora-spam` script is not malicious then you not use the script without being fully aware of the risks of doing so. A malicious variant of this script (perhaps created by others) could steal your Quora credentials and use them to impersonate your Quora identity which may ultimately result in your Quora account being banned.
+However, if you cannot verify the `quora-spam` script is not malicious then you not use the script without being fully aware of the risks of doing so. A malicious variant of this script (perhaps created by others) could steal your Quora credentials (and perhaps credentials from other sites) and use them to impersonate your Quora identity which may ultimately result in your Quora account being banned or worse.
 
 In order to mitigate the risk of leaving Quora cookies sitting on your harddrive, the credentials, including cookies and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
+# RELEASE NOTES
+
+- 2022-07-07 - v1.1
+	+ README updates
+	+ use 'uid' rather than 'id' in profile objects for better consistency with Quora
+	+ rename 'profiles' commands to 'simple-notifications' to better reflect semantics
+	+ auto-generate command lists from source
+- 2022-07-07 - v1.0
+	+ initial release
+
 # DISCLAIMER
 
-While I have taken some care to ensure that this command does not place unreasonable demands on Quora's infrastructure. I make no claims about whether use of this command complies with Quora's terms of service. Use at your own discretion and only if you accept whatever risks that use of this command might entail including, but not limited to being banned from Quora.
+While we have taken some care to ensure that this software does not abuse Quora's API, we make no claims as to whether use of this software complies with Quora's terms of service. Users concerned about this should do their own research and refrain from use of this software if they have any concerns.
 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+# COPYRIGHT
 
+Copyright (C) 2022 Wild Duck Theories Australia Pty Ltd.
+Portions Copyright (C) 2022 UPowr Pty Ltd.
+
+# LICENSE
+
+Unless otherwise specified, all source code in the quora-spam project is licensed under GPLv2:
+
+```text
+GNU GENERAL PUBLIC LICENSE
+
+Version 2, June 1991
+
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
+
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
+```
+
+The **\_ju** function in quora-spam has the following MIT license.
+
+```text
+Copyright (C) 2022 UPowr Pty Ltd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
