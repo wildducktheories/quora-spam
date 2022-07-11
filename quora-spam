@@ -24,40 +24,28 @@ _cookies() {
 }
 
 _curl() {
-    local method=$1
-    local path=$2
-    shift 2
+    local o="$(_ju o "$@")"
 
     local cookie=$(_cookies)
     test -n "$cookie" || die "not logged in"
 
-    set -- "$@" \
-        -s \
+    eval "$(echo "$o" | _ju pipe 'select method,path,data,headers,args|to env')"
+    (
+      IFS=$'\t'
+      set -- -H "cookie: $cookie" \
         --compressed \
-        -H 'authority: www.quora.com' \
-        -H 'accept: */*' \
-        -H 'quora-canary-revision: false' \
-        -H 'quora-formkey: Ceenap3Bahkeineiyai8bei0iNoowaiF' \
-        -H 'accept-language: en-AU,en;q=0.9,en-US;q=0.8' \
-        -H "cookie: $cookie" \
-        -H 'origin: https://www.quora.com' \
-        -H 'sec-ch-ua: ".Not/A)Brand";v="99", "Google Chrome";v="103", "Chromium";v="103"' \
-        -H 'sec-ch-ua-mobile: ?0' \
-        -H 'sec-ch-ua-platform: "macOS"' \
-        -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36' \
-
-    case "$method" in
-      GET)
-          set -- "$@" \
-            -H 'cache-control: max-age=0' \
-            -H 'upgrade-insecure-requests: 1'
-      ;;
-      PUT|POST)
-          set -- "$@" -H 'content-type: application/json'
-      ;;
-    esac
-
-    curl "$@" "https://www.quora.com$path"
+        -s \
+        $(
+          (
+              echo "$args";
+              echo "$headers"
+          ) | _to curl-args
+        )
+      if test -n "$data"; then
+        set -- "$@" --data-raw "$data"
+      fi
+      curl "$@" "https://www.quora.com$path"
+    )
 }
 
 _har() {
@@ -451,15 +439,13 @@ _post() {
           _template body /graphql/gql_POST?q=UserMute_userMute_Mutation | \
           jq -c --argjson uid "$uid" '.variables.uid=$uid'
         )"
+        local path='/graphql/gql_POST?q=UserMute_userMute_Mutation'
 
-        _curl POST '/graphql/gql_POST?q=UserMute_userMute_Mutation' \
-          -H 'quora-broadcast-id: main-w-chan49-8888-react_nvopajbxntwjsdtn-8poq' \
-          -H 'quora-revision: b8405a23e662549e278d2a571c91cf44505b3cab' \
-          -H 'quora-window-id: react_nvopajbxntwjsdtn' \
-          -H 'sec-fetch-dest: empty' \
-          -H 'sec-fetch-mode: cors' \
-          -H 'sec-fetch-site: same-origin' \
-          --data-raw "$data" \
+        _curl \
+          method:POST \
+          path:"$path" \
+          headers:"$(_template header "$path")" \
+          data:"$data" \
           | jq -c --arg uid "$uid" '
                 {
                     "uid": $uid,
@@ -473,23 +459,20 @@ _post() {
         message="$*"
         message="${message:-Spammy link in profile.}"
 
+        local path='/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation'
         local data=$(
-          _template body /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation \
+          _template body "$path" \
           | jq -c --arg message "$message" --argjson uid "$uid" '
             .variables.comment|=fromjson
             |.variables.comment.sections[0].spans[0].text|=$message
             |.variables.comment|=tojson
             |.variables.reportableId=$uid
         ')
-
-        _curl POST '/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation' \
-          -H 'quora-broadcast-id: main-w-chan50-8888-react_hcftjklsctnkbkky-axVB' \
-          -H 'quora-revision: 9f36e69ebb7b3fcbeaf98ea02b31200923276eae' \
-          -H 'quora-window-id: react_hcftjklsctnkbkky' \
-          -H 'sec-fetch-dest: empty' \
-          -H 'sec-fetch-mode: cors' \
-          -H 'sec-fetch-site: same-origin' \
-          --data-raw "$data" \
+        _curl \
+          method:POST \
+          path:"$path" \
+          headers:"$(_template header "$path")" \
+          data:"$data" \
           | jq -c --arg uid "$uid" '{
                "uid": $uid,
                "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
@@ -500,26 +483,18 @@ _post() {
 
     _markAsRead() {
       local sncid="$1"
-      local data=$(jq -nc --argjson sncid "$sncid" '{
-        "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
-        "extensions":{
-          "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
-        },
-        "variables":{
-          "sncid":$sncid,
-          "source":"notif_page",
-          "shouldLogClick":true
-        }
-      }')
-      _curl POST '/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation' \
-        -H 'quora-broadcast-id: main-w-chan51-8888-react_yllqzbpigkowdnch-eAYX' \
-        -H 'quora-revision: 5e170308ddecf765200201715bdae6c9d1fa78f1' \
-        -H 'quora-window-id: react_yllqzbpigkowdnch' \
-        -H 'referer: https://www.quora.com/notifications/upvotes' \
-        -H 'sec-fetch-dest: empty' \
-        -H 'sec-fetch-mode: cors' \
-        -H 'sec-fetch-site: same-origin' \
-        --data-raw "$data" \
+      local path='/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation'
+      local data="$(
+        _template body "$path" \
+        | jq -c --argjson sncid "$sncid" '
+          .variables.sncid=$sncid
+      ')"
+
+      _curl \
+        method:POST \
+        path:"$path" \
+        headers:"$(_template header "$path")" \
+        data:"$data" \
         | jq -c --argjson sncid "$sncid" '
         {
             "sncid": $sncid,
@@ -542,12 +517,11 @@ _query() {
 
     _profile() {
         local profile=${1#/profile/}
-        _curl GET '/profile/'$profile \
-          -H 'sec-fetch-dest: document' \
-          -H 'sec-fetch-mode: navigate' \
-          -H 'sec-fetch-site: none' \
-          -H 'sec-fetch-user: ?1' \
-          -L \
+        _curl \
+          method:GET \
+          path:"/profile/$profile" \
+          headers:"$(_template header '/profile/$profile')" \
+          args:'["-L"]' \
           | _filter html \
           | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
     }
@@ -560,7 +534,10 @@ _query() {
         fi
         profile=${profile#/profile/}
 
-        _curl GET "/profile/$profile/followers" \
+        _curl \
+          method:GET \
+          path:"/profile/$profile/followers" \
+          headers:"$(_template header '/profile/$profile/followers')" \
         | _filter html \
         | jq '.data.user.followerUsersConnection.edges[]|.node' \
         | _ju select uid,profileUrl,isBlockedByViewer
@@ -588,11 +565,10 @@ _query() {
     }
 
     _upvotes() {
-        _curl GET '/notifications/upvotes' \
-            -H 'sec-fetch-dest: document' \
-            -H 'sec-fetch-mode: navigate' \
-            -H 'sec-fetch-site: none' \
-            -H 'sec-fetch-user: ?1' \
+        _curl \
+          method:GET \
+          path:'/notifications/upvotes' \
+          headers:"$(_template header /notifications/upvotes)" \
         | _filter html
     }
 
@@ -644,7 +620,26 @@ _template() {
     _header() {
     jq -c <<EOF
 {
-   "/notifications/upvotes": {
+  "/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan49-8888-react_pxemluvapjrirdhr-UQaz",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "b9c9c3eca0656a91bd2c1aa588dcc28495fe1684",
+    "quora-window-id": "react_pxemluvapjrirdhr",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/notifications/upvotes": {
     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
     "accept-encoding": "gzip, deflate, br",
     "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
@@ -797,6 +792,17 @@ EOF
     "variables": {
       "uid": null
     }
+  },
+  "/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation": {
+    "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
+    "extensions":{
+      "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
+    },
+    "variables":{
+      "sncid":null,
+      "source":"notif_page",
+      "shouldLogClick":true
+    }
   }
 }
 EOF
@@ -804,14 +810,14 @@ EOF
 
     local type=$1
     local path=$2
-    local expr="jq -r 'to_entries[]|.key';"
 
+    set -- jq -r 'to_entries[]|.key';
     test -n "$type" || die "usage: template {type} [{path}]}"
 
     if test -n "$path"; then
-      expr="jq --arg path "$path" '.[\$path]';"
+      set -- jq -c --arg path "$path" '.[$path]';
     fi
-    dispatch "$type" | eval "$expr"
+    dispatch "$type" | "$@"
 }
 
 _to() {
