@@ -640,14 +640,6 @@ _shell() {
     ${SHELL:-bash}
 }
 
-_to() {
-    _curl-header-args() {
-      eval "_=$(quora-spam template header /graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation | jq 'to_entries[]|"-H "+((.key+" "+.value)|tojson)' -r | tr \\012 ' ' | sed "s/.*/(&)/")"
-      echo "${_[@]}"
-    }
-    dispatch "$@"
-}
-
 _template() {
     _header() {
     jq <<EOF
@@ -790,6 +782,20 @@ EOF
       expr="jq --arg path "$path" '.[\$path]';"
     fi
     dispatch "$type" | eval "$expr"
+}
+
+_to() {
+    _curl-args() {
+      jq -r '
+        if type=="object" then
+          to_entries[]|"-H\t"+.key+": "+.value
+        elif type=="array" then
+          .|join("\t")
+        else
+          .
+        end' | tr \\012 \\011 | sed "s/.\$//"
+    }
+    dispatch "$@"
 }
 
 _usage() {
