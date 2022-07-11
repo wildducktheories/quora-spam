@@ -193,6 +193,17 @@ _loop() {
 }
 
 _filter() {
+
+    _activity-summary() {
+      jq '
+        .data.user.activityConnection.edges[].node.feedReason
+        |select(.__isFeedReason=="UserUpvotedAnswerReason")
+        |.uid=.userNames[0].uid
+        |.timestamp|=(./1000000|round|todateiso8601)
+      ' \
+      | ju select 'uid,url,timestamp'
+    }
+
     _html() {
         grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
         | tail -1 \
@@ -503,6 +514,29 @@ _post() {
 
     }
 
+    _activity() {
+      eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
+      test -n "$uid" && test -n "$first" && test -n "$after" || die "usage: activity uid:{uid} first:{first} after:{after}"
+      local path="/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
+      local data=$(
+          _template body "$path" \
+          | jq \
+            -c \
+            --argjson uid "$uid" \
+            --argjson first "$first" \
+            --arg after "$after" '
+          .variables.uid=$uid
+          |.variables.first=$first
+          |.variables.after=$after
+      ')
+
+      _curl \
+        method:POST \
+        path:"$path" \
+        headers:"$(_template headers "$path")" \
+        data:"$data"
+    }
+
     dispatch "$@"
 }
 
@@ -514,6 +548,34 @@ _process() {
 }
 
 _query() {
+
+    _activity-summary() {
+      local uid=$1
+      test -n "$uid" || die "usage: activity-summary {uid]"
+
+      end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r .data.user.activityConnection.pageInfo.endCursor)
+      test -n "$end_cursor" || die "query: activity-summary: end_cursor is empty"
+      first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 1) | _filter activity-summary)
+      test -n "$first" || die "query: activity-summary: first is empty"
+      last=$(_post activity uid:$uid first:1 after:0  | _filter activity-summary)
+      test -n "$last" || die "query: activity-summary: last is empty"
+
+      jq -nc \
+        --argjson count "$end_cursor" \
+        --argjson first "$first" \
+        --argjson last "$last" \
+        --argjson uid "$uid" '
+      {
+          uid: $uid,
+
+          upvotes: {
+            count: $count,
+            first: ($first|del(.uid)),
+            last: ($last|del(.uid))
+          }
+      }
+      '
+    }
 
     _profile() {
         local profile=${1#/profile/}
@@ -744,6 +806,25 @@ _template() {
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
     "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://www.quora.com",
+    "quora-broadcast-id": "main-w-chan50-8888-react_gvkeyzfhoyeeovpl-bvTC",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "6f83bc46e0b270f21d00421c8be3cf5d978036f3",
+    "quora-window-id": "react_gvkeyzfhoyeeovpl",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
   }
 }
 EOF
@@ -753,6 +834,17 @@ EOF
     _body() {
     jq <<EOF
 {
+  "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query": {
+    "queryName": "UserProfileActivity_feedStories_Query",
+    "extensions": {
+      "hash": "b3ec746645150c155aa601c727d305812f83ee56365bed740487ff58358c3814"
+    },
+    "variables": {
+      "uid": null,
+      "first": 3,
+      "after": "0"
+    }
+  },
   "/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation": {
     "queryName": "ReportModalInner_reportAdd_Mutation",
     "extensions": {
