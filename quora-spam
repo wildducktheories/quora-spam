@@ -643,6 +643,11 @@ _query() {
         _simple-profiles | _filter sweet-hot-girls
     }
 
+    _uid() {
+        local profile=${1#/profile/}
+        _simple-profile "$profile" | jq -r .uid
+    }
+
     _upvotes() {
         _curl \
           method:GET \
