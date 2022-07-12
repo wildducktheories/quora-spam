@@ -444,7 +444,7 @@ _post() {
         _curl \
           method:POST \
           path:"$path" \
-          headers:"$(_template header "$path")" \
+          headers:"$(_template headers "$path")" \
           data:"$data" \
           | jq -c --arg uid "$uid" '
                 {
@@ -471,7 +471,7 @@ _post() {
         _curl \
           method:POST \
           path:"$path" \
-          headers:"$(_template header "$path")" \
+          headers:"$(_template headers "$path")" \
           data:"$data" \
           | jq -c --arg uid "$uid" '{
                "uid": $uid,
@@ -493,7 +493,7 @@ _post() {
       _curl \
         method:POST \
         path:"$path" \
-        headers:"$(_template header "$path")" \
+        headers:"$(_template headers "$path")" \
         data:"$data" \
         | jq -c --argjson sncid "$sncid" '
         {
@@ -520,7 +520,7 @@ _query() {
         _curl \
           method:GET \
           path:"/profile/$profile" \
-          headers:"$(_template header '/profile/$profile')" \
+          headers:"$(_template headers '/profile/$profile')" \
           args:'["-L"]' \
           | _filter html \
           | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
@@ -537,7 +537,7 @@ _query() {
         _curl \
           method:GET \
           path:"/profile/$profile/followers" \
-          headers:"$(_template header '/profile/$profile/followers')" \
+          headers:"$(_template headers '/profile/$profile/followers')" \
         | _filter html \
         | jq '.data.user.followerUsersConnection.edges[]|.node' \
         | _ju select uid,profileUrl,isBlockedByViewer
@@ -568,7 +568,7 @@ _query() {
         _curl \
           method:GET \
           path:'/notifications/upvotes' \
-          headers:"$(_template header /notifications/upvotes)" \
+          headers:"$(_template headers /notifications/upvotes)" \
         | _filter html
     }
 
@@ -617,7 +617,7 @@ _shell() {
 }
 
 _template() {
-    _header() {
+    _headers() {
     jq -c <<EOF
 {
   "/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation": {
