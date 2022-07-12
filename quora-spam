@@ -134,11 +134,12 @@ _har() {
     jq '
       [
         .log.entries[].request
-        |select(.url|startswith("https://www.quora.com/"))
+        |select(.url|contains("quora.com/"))
         |
           [.headers[]|.key=.name]
           |from_entries
           |.[":path"] as $path
+          |select($path != null)
           |with_entries(
             if
               (.key|startswith(":"))
@@ -162,9 +163,10 @@ _har() {
     jq '
       [
         .log.entries[].request
-        |select(.url|startswith("https://www.quora.com/"))
+        |select(.url|contains("quora.com/"))
         |([.headers[]|.key=.name]|from_entries) as $headers
         |$headers[":path"] as $path
+        |select($path!=null)
         |select($path|ascii_downcase|contains("facebook")|not)
         |select(.postData.mimeType=="application/json")
         |(.postData.text|fromjson) as $body
