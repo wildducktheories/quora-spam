@@ -204,12 +204,15 @@ _filter() {
 
     _activity-summary() {
       jq '
-        .data.user.activityConnection.edges[].node.feedReason
+        .data.user.activityConnection.edges[].node as $node
+        |$node.feedReason
         |select(.__isFeedReason=="UserUpvotedAnswerReason")
         |.uid=.userNames[0].uid
         |.timestamp|=(./1000000|round|todateiso8601)
+        |.profileUrl=.userNames[0].profileUrl
+        |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
       ' \
-      | ju select 'uid,url,timestamp'
+      | ju select 'uid,url,text,timestamp,profileUrl'
     }
 
     _html() {
@@ -573,13 +576,19 @@ _query() {
         --argjson first "$first" \
         --argjson last "$last" \
         --argjson uid "$uid" '
-      {
+      (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) as $active
+      |($count*36000/$active|round|./10) as $rate
+      |{
           uid: $uid,
+          profileUrl: $first.profileUrl,
 
           upvotes: {
             count: $count,
-            first: ($first|del(.uid)),
-            last: ($last|del(.uid))
+            active_seconds: $active,
+            active_hours: ($active/360|round|./10),
+            rate_per_hour: $rate,
+            first: ($first|del(.uid)|del(.profileUrl)),
+            last: ($last|del(.uid)|del(.profileUrl))
           }
       }
       '
