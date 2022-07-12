@@ -56,6 +56,71 @@ _curl() {
     )
 }
 
+_filter() {
+
+    _activity-summary() {
+      jq '
+        .data.user.activityConnection.edges[].node as $node
+        |$node.feedReason
+        |select(.__isFeedReason=="UserUpvotedAnswerReason")
+        |.uid=.userNames[0].uid
+        |.timestamp|=(./1000000|round|todateiso8601)
+        |.profileUrl=.userNames[0].profileUrl
+        |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
+      ' \
+      | ju select 'uid,url,text,timestamp,profileUrl'
+    }
+
+    _html() {
+        grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
+        | tail -1 \
+        | sed "s/;\$//" \
+        | sed "s/^[^=]*= //" \
+        | jq -r .
+    }
+
+    _simple-notifications() {
+      jq -c '
+          .data.viewer.sentNotifCollectionsConnection.edges[].node
+          |{
+              "sncid": .sncid,
+              "uid": (.responsibleUser.uid|tostring),
+              "profileUrl": .userImageUser.profileUrl,
+              "isSpam": false,
+              "isRead": .isRead
+          }'
+    }
+
+    _simple-profiles() {
+        jq -c . \
+        | while read profile; do
+            eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
+            jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
+        done
+    }
+
+    # converts a full profile into a simple profile
+    _full-to-simple-profile() {
+      jq -c '{
+        "uid": .data.user.uid,
+        "profileUrl":.data.user.profileUrl,
+        "isBlockedByViewer": .data.user.isBlockedByViewer,
+        "viewerHasMuted": .data.user.viewerHasMuted,
+        "isSpam": false,
+        "links": [
+            .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
+            |select(.modifiers.link!=null)|.text
+         ]
+      }'
+    }
+
+    _sweet-hot-girls() {
+        jq -c 'select(.links|any(contains("sweethotgirls")))|.isSpam=true'
+    }
+
+    dispatch "$@"
+}
+
 _har() {
   _cookie() {
     jq -r '
@@ -200,70 +265,6 @@ _loop() {
     done
 }
 
-_filter() {
-
-    _activity-summary() {
-      jq '
-        .data.user.activityConnection.edges[].node as $node
-        |$node.feedReason
-        |select(.__isFeedReason=="UserUpvotedAnswerReason")
-        |.uid=.userNames[0].uid
-        |.timestamp|=(./1000000|round|todateiso8601)
-        |.profileUrl=.userNames[0].profileUrl
-        |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
-      ' \
-      | ju select 'uid,url,text,timestamp,profileUrl'
-    }
-
-    _html() {
-        grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
-        | tail -1 \
-        | sed "s/;\$//" \
-        | sed "s/^[^=]*= //" \
-        | jq -r .
-    }
-
-    _simple-notifications() {
-      jq -c '
-          .data.viewer.sentNotifCollectionsConnection.edges[].node
-          |{
-              "sncid": .sncid,
-              "uid": (.responsibleUser.uid|tostring),
-              "profileUrl": .userImageUser.profileUrl,
-              "isSpam": false,
-              "isRead": .isRead
-          }'
-    }
-
-    _simple-profiles() {
-        jq -c . \
-        | while read profile; do
-            eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
-            jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
-        done
-    }
-
-    # converts a full profile into a simple profile
-    _full-to-simple-profile() {
-      jq -c '{
-        "uid": .data.user.uid,
-        "profileUrl":.data.user.profileUrl,
-        "isBlockedByViewer": .data.user.isBlockedByViewer,
-        "viewerHasMuted": .data.user.viewerHasMuted,
-        "isSpam": false,
-        "links": [
-            .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
-            |select(.modifiers.link!=null)|.text
-         ]
-      }'
-    }
-
-    _sweet-hot-girls() {
-        jq -c 'select(.links|any(contains("sweethotgirls")))|.isSpam=true'
-    }
-
-    dispatch "$@"
-}
 
 _ju() {
     _from() {
