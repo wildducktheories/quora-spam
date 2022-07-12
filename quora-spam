@@ -15,6 +15,14 @@ dispatch () {
     "$@"
 }
 
+_apply-template() {
+  set +x
+  local selector="$*"
+  selector=${selector// /_}
+  selector=${selector//-/_}
+  jq "$(_template "$@") $selector"
+#  jq "$(_template "$@")"
+}
 
 _cookies() {
     if test -z "$QUORA_COOKIE"; then
