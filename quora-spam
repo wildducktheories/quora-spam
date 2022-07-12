@@ -499,8 +499,6 @@ _post() {
                "uid": $uid,
                "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
           }'
-
-        _mute "$uid"
     }
 
     _markAsRead() {
@@ -684,7 +682,8 @@ _report() {
                 fi
                 if test "$isBlockedByViewer" = "false"; then
                   _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
-                elif test "$viewerHasMuted" = "false"; then
+                fi
+                if test "$viewerHasMuted" = "false"; then
                   _post mute "$uid"
                 fi
             ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
