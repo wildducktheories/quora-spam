@@ -917,16 +917,166 @@ EOF
 EOF
     }
 
+    _report() {
+      _sweet-hot-girls() {
+
+        echo 'def report_sweet_hot_girls:
+  .activity as $activity
+  |.others as $others
+  |{
+      "sections": [
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": "This profile is a so-called “sweethotgirls upvote spammer”.\n"
+            }
+          ]
+        },
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": "The profile generates large numbers of inauthentic upvotes across a large number of random answers at about a rate of 1 per minute. The profile contains a picture of a sexually attractive woman and a deceptive link to a site promising pornography &/or sex. It is clear the intent of the profile is to lure unsuspecting Quora users to visit a site which they might not otherwise visit."
+            }
+          ]
+        },
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": "Between \($activity.upvotes.first.timestamp) and \($activity.upvotes.last.timestamp) this profile submitted upto \($activity.upvotes.count) spammy upvotes."
+            }
+          ]
+        },
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": ("upvote#1 @ "+$activity.upvotes.first.timestamp)
+            },
+            {
+              "modifiers": {
+                "link": {
+                  "type": "url",
+                  "url": "https://www.quora.com\($activity.upvotes.first.url)"
+                }
+              },
+              "text": $activity.upvotes.first.text
+            }
+          ]
+        },
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": ("upvote#"+($activity.upvotes.count|tostring)+" @ "+$activity.upvotes.last.timestamp)
+            },
+            {
+              "modifiers": {
+                "link": {
+                  "type": "url",
+                  "url": "https://www.quora.com\($activity.upvotes.last.url)"
+                }
+              },
+              "text": $activity.upvotes.last.text
+            },
+            {
+              "modifiers": {},
+              "text": " "
+            }
+          ]
+        },
+        {
+          "type": "plain",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {},
+              "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
+            }
+          ]
+        },
+        ($others|map({
+          "type": "unordered-list",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
+            {
+              "modifiers": {
+                "link": {
+                  "type": "url",
+                  "url": ("https://www.quora.com"+.)
+                }
+              },
+              "text": ("https://www.quora.com"+.)
+            },
+            {
+              "modifiers": {},
+              "text": "\n"
+            }
+          ]
+          }))
+      ]|flatten,
+    "caret": {
+      "start": {
+        "spanIdx": 0,
+        "sectionIdx": 0,
+        "offset": 12
+      },
+      "end": {
+        "spanIdx": 0,
+        "sectionIdx": 0,
+        "offset": 12
+      }
+    }
+  }
+;'
+      }
+
+      dispatch "$@"
+    }
+
     local type=$1
     local path=$2
 
-    set -- jq -r 'to_entries[]|.key';
-    test -n "$type" || die "usage: template {type} [{path}]}"
+    case "$type" in
+      report)
+        dispatch "$@"
+      ;;
+      *)
+        set -- jq -r 'to_entries[]|.key';
+        test -n "$type" || die "usage: template {type} [{path}]}"
 
-    if test -n "$path"; then
-      set -- jq -c --arg path "$path" '.[$path]';
-    fi
-    dispatch "$type" | "$@"
+        if test -n "$path"; then
+          set -- jq -c --arg path "$path" '.[$path]';
+        fi
+        dispatch "$type" | "$@"
+      ;;
+    esac
 }
 
 _to() {
