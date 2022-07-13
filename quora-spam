@@ -93,8 +93,9 @@ _curl() {
 _file-profile-report() {
   local profile=${1#/profile/}
 
-  local submit_credentials=$(_submit-credentials)
-  if test -n "$submit_credentials"; then
+  local is_enabled=$(_config get enable-submit)
+
+  if test "$is_enabled" = "true"; then
     local uid=$(_query uid $profile)
     test -n "$uid" || die "file-profile-report: usage: ... {profileUrl}"
     content=$(jq -n \
@@ -125,7 +126,7 @@ _file-profile-report() {
       _ju o uid:$uid
    )
   else
-      die "file-profile-report: only supported for users with an submit submit credentials"
+    echo "warn: profile report not submitted. run 'quora-spam config set enable-submit:true' to enable" 1>&2
   fi
 }
 
