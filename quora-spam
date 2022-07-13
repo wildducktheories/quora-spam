@@ -47,7 +47,7 @@ _curl() {
           (
               echo "$args";
               echo "$headers"
-          ) | _to curl-args
+          ) | __to curl-args
         )
       if test -n "$data"; then
         set -- "$@" --data-raw "$data"
@@ -1086,7 +1086,7 @@ EOF
     esac
 }
 
-_to() {
+__to() {
     _curl-args() {
       jq -r '
         if type=="object" then
@@ -1098,6 +1098,10 @@ _to() {
         end' | tr \\012 \\011 | sed "s/.\$//"
     }
     dispatch "$@"
+}
+
+_to() {
+  __to "$@"
 }
 
 _usage() {
