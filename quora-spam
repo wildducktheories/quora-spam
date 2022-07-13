@@ -676,7 +676,7 @@ _report() {
     _sweet-hot-girls() {
         while read -r profile; do
             (
-                eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid|to env')"
+                eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
                 if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
                   continue
                 fi
