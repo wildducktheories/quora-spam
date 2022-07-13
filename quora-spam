@@ -31,6 +31,14 @@ _cookies() {
     echo "$QUORA_COOKIE"
 }
 
+_submit-cookies() {
+  if test -f "${QUORA_DOTFILES}/submit-cookie"; then
+    cat "${QUORA_DOTFILES}/submit-cookie"
+  else
+    _cookies
+  fi
+}
+
 _curl() {
     local o="$(_ju o "$@")"
 
@@ -58,33 +66,42 @@ _curl() {
 }
 
 _file-profile-report() {
-  local profile=${1#/profile/}
-  local uid=$(_query uid $profile)
-  test -n "$uid" || die "file-profile-report: usage: ... {uid}"
-  content=$(jq -n \
-    --argjson "activity" "$(
-      quora-spam query activity-summary $uid
-    )" \
-    --argjson "others" "$(
-        quora-spam query sweet-hot-girls | jq -sc --arg 'profile' "$profile" 'map(.profileUrl|select(.|contains($profile)|not))'
-    )" \
-    '{"activity": $activity, "others": $others}' \
-    | quora-spam apply-template report sweet-hot-girls \
-    | jq -c
-  )
-  host=profilereports.quora.com
-  title="profile: ($profile, $uid)"
-  body=$(_ju o "title:$title" "content:$content" | _apply-template report profile-report | jq -c .)
-  path='/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation'
-  headers=$(_template headers "$path")
 
-  _curl \
-    host:$host \
-    method:POST \
-    path:"$path" \
-    headers:"$headers" \
-    data:"$body" >/dev/null
-  _ju o uid:$uid
+  local submit_cookies=$(_submit-cookies)
+  if test -n "$submit_cookies"; then
+    local profile=${1#/profile/}
+    local uid=$(_query uid $profile)
+    test -n "$uid" || die "file-profile-report: usage: ... {uid}"
+    content=$(jq -n \
+      --argjson "activity" "$(
+        quora-spam query activity-summary $uid
+      )" \
+      --argjson "others" "$(
+          quora-spam query sweet-hot-girls | jq -sc --arg 'profile' "$profile" 'map(.profileUrl|select(.|contains($profile)|not))'
+      )" \
+      '{"activity": $activity, "others": $others}' \
+      | quora-spam apply-template report sweet-hot-girls \
+      | jq -c
+    )
+    host=profilereports.quora.com
+    title="profile: ($profile, $uid)"
+    body=$(_ju o "title:$title" "content:$content" | _apply-template report profile-report | jq -c .)
+    path='/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation'
+    headers=$(_template headers "$path")
+
+    (
+      QUORA_COOKIE=$submit_cookies _curl \
+        host:$host \
+        method:POST \
+        path:"$path" \
+        headers:"$headers" \
+        data:"$body" >/dev/null
+
+      _ju o uid:$uid
+   )
+  else
+      die "file-profile-report: only supported for users with an submit cookie"
+  fi
 }
 
 _filter() {
@@ -704,7 +721,6 @@ _require() {
 
 _report() {
     _sweet-hot-girls() {
-        is_admin=$(test "$(_query uid)" = "944970" && echo true || echo false)
         while read -r profile; do
             (
                 eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
@@ -717,9 +733,7 @@ _report() {
                 fi
                 if test "$isBlockedByViewer" = "false"; then
                   _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
-                  if $is_admin; then
-                    _file-profile-report "$profileUrl"
-                  fi
+                  _file-profile-report "$profileUrl"
                 fi
                 if test "$viewerHasMuted" = "false"; then
                   _post mute "$uid"
@@ -985,7 +999,7 @@ EOF
       "content": "{\"sections\":[{\"type\":\"plain\",\"indent\":0,\"quoted\":false,\"is_rtl\":false,\"spans\":[{\"modifiers\":{},\"text\":\"test\"}]}]}",
       "shouldQueue": true,
       "accessOption": null,
-      "credentialId": 34699532
+      "credentialId": null
     }
   }
 }
