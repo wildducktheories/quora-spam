@@ -87,7 +87,7 @@ The `quora-spam` command is a wrapper for a large number of functions that can b
 	pbpaste | quora-spam har save # or,
 	quora-spam har save < saved.har
 
-This command reads a HAR file from stdin. A HAR file is an archive of requests your browser has sent to and responses received from the Internet. We need to analyze this file so that we can extract the cookies we need to login to Quora on your behalf. See the SECURITY note, below.
+This command reads a HAR file from stdin. A HAR file is an archive of requests your browser has sent to and responses received from the Internet. We need to analyze this file so that we can extract the headers we need to login to Quora on your behalf. See the SECURITY note, below.
 
 These instructions assume you are using Chrome as your browser. You can probably find information about similar tools for your browser of choice.
 
@@ -97,7 +97,7 @@ These instructions assume you are using Chrome as your browser. You can probably
 4. navigate to the "Network" tab of the devtools window and select a request to quora.com
 5. select "Copy > Copy all as HAR" from the context menu
 
-Your clipboard now contains a HAR which contains, amongst other things, cookies that can be used to login to Quora. Now run the `quora-spam har save` command with the contents of your clipboard piped to stdin.
+Your clipboard now contains a HAR which contains, amongst other things, headers that can be used to login to Quora. Now run the `quora-spam har save` command with the contents of your clipboard piped to stdin.
 
 For example, on OSX, you can run:
 
@@ -119,7 +119,7 @@ On OSX, runs `brew install` to install any missing commands. On other environmen
 
 This command assumes that `quora-spam har save` has been run previously.
 
-It checks the Quora cookies are available and then starts a new shell. Once this shell exits the `quora-spam logout` command is executed to delete sensitive files from ~/.quora-spam.
+It checks the Quora credentials are available and then starts a new shell. Once this shell exits the `quora-spam logout` command is executed to delete sensitive files from ~/.quora-spam.
 
 Remember to either delete or secure any other copy of the HAR file you might have saved.
 
@@ -127,7 +127,7 @@ See the EXAMPLES section for what to do next.
 
 ## logout
 
-This command purges the files saved with `quora-spam har save` including the cookie file extracted from that file.
+This command purges the files saved with `quora-spam har save` including the credentials file extracted from that file.
 
 This command is also run automatically when the shell created by `quora-spam login` exits.
 
@@ -188,14 +188,19 @@ quora-spam loop process sweet-hot-girls
 
 # SECURITY
 
-This command makes use of a HAR file that contains sensitive cookies that are used to autheticate your browser's access to Quora (and perhaps other sites). The `quora-spam` command needs to use these cookies to perform spam reporting functions on your behalf. The `quora-spam` script DOES send these credentials back to quora.com, but does not send them anywhere else.
+This command makes use of a HAR file that contains sensitive credentials that are used to autheticate your browser's access to Quora (and perhaps other sites). The `quora-spam` command needs to use these credentials to perform spam reporting functions on your behalf. The `quora-spam` script DOES send these credentials back to quora.com, but does not send them anywhere else.
 
 However, if you cannot verify the `quora-spam` script is not malicious then you not use the script without being fully aware of the risks of doing so. A malicious variant of this script (perhaps created by others) could steal your Quora credentials (and perhaps credentials from other sites) and use them to impersonate your Quora identity which may ultimately result in your Quora account being banned or worse.
 
-In order to mitigate the risk of leaving Quora cookies sitting on your harddrive, the credentials, including cookies and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
+In order to mitigate the risk of leaving Quora credentials sitting on your harddrive, the credentials, including credentials and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
 # RELEASE NOTES
 
+- 2002-07-12 - v1.2
+	+ add support for generating an activity summary for a profile
+	+ add support for submitting profile reports to profilereports.quora.com
+	+ replace 'cookies' file with 'credentials' file which includes quora-formkey header
+	+ add support for separate 'submit-credential' to allow submitting profile reports to profilereports.quora.com with a different Quora userid
 - 2022-07-07 - v1.1
 	+ README updates
 	+ use 'uid' rather than 'id' in profile objects for better consistency with Quora

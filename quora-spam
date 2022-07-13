@@ -24,37 +24,38 @@ _apply-template() {
 #  jq "$(_template "$@")"
 }
 
-_cookies() {
-    if test -z "$QUORA_COOKIE"; then
-      export QUORA_COOKIE=$(test -f "$QUORA_DOTFILES/cookie" && cat "$QUORA_DOTFILES/cookie")
+_credentials() {
+    if test -z "$QUORA_CREDENTIALS"; then
+      export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
     fi
-    echo "$QUORA_COOKIE"
+    echo "$QUORA_CREDENTIALS"
 }
 
-_submit-cookies() {
-  if test -f "${QUORA_DOTFILES}/submit-cookie"; then
-    cat "${QUORA_DOTFILES}/submit-cookie"
+_submit-credentials() {
+  if test -f "${QUORA_DOTFILES}/submit-credentials"; then
+    cat "${QUORA_DOTFILES}/submit-credentials"
   else
-    _cookies
+    _credentials
   fi
 }
 
 _curl() {
     local o="$(_ju o "$@")"
 
-    local cookie=$(_cookies)
-    test -n "$cookie" || die "not logged in"
+    local credentials=$(_credentials)
+    test -n "$credentials" || die "not logged in"
 
     eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
     (
       IFS=$'\t'
-      set -- -H "cookie: $cookie" \
+      set -- \
         --compressed \
         -s \
         $(
           (
               echo "$args";
-              echo "$headers"
+              echo "$headers";
+              echo "$credentials";
           ) | __to curl-args
         )
       if test -n "$data"; then
@@ -66,12 +67,12 @@ _curl() {
 }
 
 _file-profile-report() {
+  local profile=${1#/profile/}
 
-  local submit_cookies=$(_submit-cookies)
-  if test -n "$submit_cookies"; then
-    local profile=${1#/profile/}
+  local submit_credentials=$(_submit-credentials)
+  if test -n "$submit_credentials"; then
     local uid=$(_query uid $profile)
-    test -n "$uid" || die "file-profile-report: usage: ... {uid}"
+    test -n "$uid" || die "file-profile-report: usage: ... {profileUrl}"
     content=$(jq -n \
       --argjson "activity" "$(
         quora-spam query activity-summary $uid
@@ -90,7 +91,7 @@ _file-profile-report() {
     headers=$(_template headers "$path")
 
     (
-      QUORA_COOKIE=$submit_cookies _curl \
+      QUORA_CREDENTIALS=$(_submit-credentials) _curl \
         host:$host \
         method:POST \
         path:"$path" \
@@ -100,7 +101,7 @@ _file-profile-report() {
       _ju o uid:$uid
    )
   else
-      die "file-profile-report: only supported for users with an submit cookie"
+      die "file-profile-report: only supported for users with an submit submit credentials"
   fi
 }
 
@@ -170,15 +171,22 @@ _filter() {
 }
 
 _har() {
-  _cookie() {
-    jq -r '
-      [.log.entries[].request
-      |select(.url|startswith("https://www.quora.com/"))
-      |.headers[]
-      |select(.name=="cookie")
-      |.value][-1]'
+
+  _credentials() {
+    _raw-headers | \
+    jq -c '
+      [to_entries[]
+      |.value
+      |with_entries(
+        select(
+          .key=="cookie"
+          or .key=="quora-formkey"
+        )
+      )][-1]
+    '
   }
-  _headers() {
+
+  _raw-headers() {
     jq '
       [
         .log.entries[].request
@@ -187,19 +195,7 @@ _har() {
           [.headers[]|.key=.name]
           |from_entries
           |.[":path"] as $path
-          |select($path != null)
-          |with_entries(
-            if
-              (.key|startswith(":"))
-              or (.key==("content-length"))
-              or (.key==("referer")
-              or (.key=="cookie"))
-            then
-              empty
-            else
-              .
-            end
-          ) as $headers
+          |select($path != null) as $headers
         |{
             "key": $path,
             "value": $headers
@@ -207,6 +203,28 @@ _har() {
       ]
       |from_entries'
   }
+
+  _headers() {
+    _raw-headers | \
+    jq '
+      with_entries(
+        .value
+        |=with_entries(
+          if
+            (.key|startswith(":"))
+            or (.key=="content-length")
+            or (.key=="referer")
+            or (.key=="cookie")
+            or (.key=="quora-formkey")
+          then
+            empty
+          else
+            .
+          end
+        )
+      )'
+  }
+
   _bodies() {
     jq '
       [
@@ -227,14 +245,24 @@ _har() {
   }
 
   _save() {
-    _require dotfiles
+    local selector=$1
     (
       umask 077
-      cat > ${QUORA_DOTFILES}/har &&
-      _cookie < $QUORA_DOTFILES/har > $QUORA_DOTFILES/cookie &&
-      _headers< $QUORA_DOTFILES/har > $QUORA_DOTFILES/headers &&
-      _bodies < $QUORA_DOTFILES/har > $QUORA_DOTFILES/bodies
-    )
+      _require dotfiles
+      case "$selector" in
+        (submit-credentials)
+            _credentials > $QUORA_DOTFILES/submit-credentials
+        ;;
+        ("")
+          (
+            cat > ${QUORA_DOTFILES}/har &&
+            _headers< $QUORA_DOTFILES/har > $QUORA_DOTFILES/headers &&
+            _bodies < $QUORA_DOTFILES/har > $QUORA_DOTFILES/bodies &&
+            _credentials < $QUORA_DOTFILES/har > $QUORA_DOTFILES/credentials
+          )
+        ;;
+      esac
+    ) || exit $?
   }
 
   dispatch "$@"
@@ -282,25 +310,44 @@ _install() {
 }
 
 _login() {
-  local cookie=$(_cookies)
-  if test -z "$cookie"; then
-    die "not logged in\n\nrun:\n\n  'pbpaste | $(basename ${BASH_SOURCE[0]}) har save'\n\nor:\n\n  '$(basename ${BASH_SOURCE[0]}) har save < saved.har'\n\nwith the contents of a web browser HAR file to extract credentials.\n" 1>&2
-  fi
+  local selector=$1
+  case "$selector" in
+    (submit)
+      local credentials=$(_submit-credentials)
+      if test -z "$credentials"; then
+        die "not logged in\n\nrun:\n\n  'pbpaste | $(basename ${BASH_SOURCE[0]}) har save submit-credentials'\n\nor:\n\n  '$(basename ${BASH_SOURCE[0]}) har save submit-credentials < saved.har'\n\nwith the contents of a web browser HAR file to extract credentials.\n" 1>&2
+      fi
+    ;;
+    ("")
+      local credentials=$(_credentials)
+      if test -z "$credentials"; then
+        die "not logged in\n\nrun:\n\n  'pbpaste | $(basename ${BASH_SOURCE[0]}) har save'\n\nor:\n\n  '$(basename ${BASH_SOURCE[0]}) har save < saved.har'\n\nwith the contents of a web browser HAR file to extract credentials.\n" 1>&2
+      fi
+    ;;
+  esac
   echo "starting quora-spam (qs) shell. exit to logout" 1>&2
   (_shell)
   local rc=$?
-  _logout
+  _logout $selector
   echo "logged out." 1>&2
   return $rc
 }
 
 _logout() {
+  local selector=$1
   if test -d ${QUORA_DOTFILES}; then
-    rm -f "${QUORA_DOTFILES}/cookie"
-    rm -f "${QUORA_DOTFILES}/har"
-    rm -f "${QUORA_DOTFILES}/headers"
-    rm -f "${QUORA_DOTFILES}/bodies"
-    rm -f "${QUORA_DOTFILES}/self"
+    case "$selector" in
+      (submit)
+          rm -f "${QUORA_DOTFILES}/submit-credentials"
+      ;;
+      ("")
+          rm -f "${QUORA_DOTFILES}/credentials"
+          rm -f "${QUORA_DOTFILES}/har"
+          rm -f "${QUORA_DOTFILES}/headers"
+          rm -f "${QUORA_DOTFILES}/bodies"
+          rm -f "${QUORA_DOTFILES}/self"
+      ;;
+    esac
   fi
 }
 
@@ -763,7 +810,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan49-8888-react_pxemluvapjrirdhr-UQaz",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "b9c9c3eca0656a91bd2c1aa588dcc28495fe1684",
     "quora-window-id": "react_pxemluvapjrirdhr",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -812,7 +858,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan49-8888-react_wkdwbuxkvtsoehvq-Z01a",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "2c343221d5d11fd67f13b8ca8a09586831ccaba8",
     "quora-window-id": "react_wkdwbuxkvtsoehvq",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -831,7 +876,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
     "quora-window-id": "react_kudnreowtdanpzoc",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -850,7 +894,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
     "quora-window-id": "react_kudnreowtdanpzoc",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -869,7 +912,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan50-8888-react_kudnreowtdanpzoc-Gj7m",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "906b08c33432ec92a44754fc91a61a035a43a5e0",
     "quora-window-id": "react_kudnreowtdanpzoc",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -888,7 +930,6 @@ _template() {
     "origin": "https://www.quora.com",
     "quora-broadcast-id": "main-w-chan50-8888-react_gvkeyzfhoyeeovpl-bvTC",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "6f83bc46e0b270f21d00421c8be3cf5d978036f3",
     "quora-window-id": "react_gvkeyzfhoyeeovpl",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -907,7 +948,6 @@ _template() {
     "origin": "https://profilereports.quora.com",
     "quora-broadcast-id": "main-w-chan49-8888-react_eutcerodozlwcvvu-6tZm",
     "quora-canary-revision": "false",
-    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
     "quora-revision": "da20f600855d7b1c67fff91a8befd1ef700fbe96",
     "quora-window-id": "react_eutcerodozlwcvvu",
     "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
@@ -1070,7 +1110,7 @@ EOF
             },
             {
               "modifiers": {},
-              "text": " generated upto \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
+              "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
             }
           ]
         },
@@ -1209,7 +1249,7 @@ _version() {
   echo "${QUORA_SPAM_VERSION}"
 }
 
-_cookies >/dev/null
+_credentials >/dev/null
 
 if test $# -eq 0; then
     set -- usage
