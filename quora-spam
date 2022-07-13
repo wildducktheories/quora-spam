@@ -39,6 +39,30 @@ _submit-credentials() {
   fi
 }
 
+_config() {
+  _require dotfiles
+
+  _get() {
+    local key=$1
+    jq -r --arg key "$key" '.[$key]' < ${QUORA_DOTFILES}/config
+  }
+
+  _set() {
+    local update
+    update=$(_ju o "$@") || die "usage: config set: key:value"
+    jq -s ".[0]*$update" \
+      < "${QUORA_DOTFILES}/config" \
+      > "${QUORA_DOTFILES}/config.new" &&
+    mv "${QUORA_DOTFILES}/config.new" "${QUORA_DOTFILES}/config"
+  }
+
+  _() {
+    jq . "${QUORA_DOTFILES}/config"
+  }
+
+  dispatch "$@"
+}
+
 _curl() {
     local o="$(_ju o "$@")"
 
@@ -758,8 +782,13 @@ _query() {
 _require() {
     _dotfiles() {
       if ! test -d "${QUORA_DOTFILES}"; then
-        mkdir -p ${QUORA_DOTFILES}
-        chmod 2700 ${QUORA_DOTFILES}
+        mkdir -p "${QUORA_DOTFILES}"
+        chmod 2700 "${QUORA_DOTFILES}"
+      fi
+      if ! test -f "${QUORA_DOTFILES}/config"; then
+        echo '{
+          "enable-submit": false
+        }' > "${QUORA_DOTFILES}/config"
       fi
     }
 
