@@ -57,6 +57,36 @@ _curl() {
     )
 }
 
+_file-profile-report() {
+  local profile=${1#/profile/}
+  local uid=$(_query uid $profile)
+  test -n "$uid" || die "file-profile-report: usage: ... {uid}"
+  content=$(jq -n \
+    --argjson "activity" "$(
+      quora-spam query activity-summary $uid
+    )" \
+    --argjson "others" "$(
+        quora-spam query sweet-hot-girls | jq -sc --arg 'profile' "$profile" 'map(.profileUrl|select(.|contains($profile)|not))'
+    )" \
+    '{"activity": $activity, "others": $others}' \
+    | quora-spam apply-template report sweet-hot-girls \
+    | jq -c
+  )
+  host=profilereports.quora.com
+  title="profile: ($profile, $uid)"
+  body=$(_ju o "title:$title" "content:$content" | _apply-template report profile-report | jq -c .)
+  path='/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation'
+  headers=$(_template headers "$path")
+
+  _curl \
+    host:$host \
+    method:POST \
+    path:"$path" \
+    headers:"$headers" \
+    data:"$body" >/dev/null
+  _ju o uid:$uid
+}
+
 _filter() {
 
     _activity-summary() {
@@ -854,6 +884,25 @@ _template() {
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
     "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+  },
+  "/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate, br",
+    "accept-language": "en-AU,en;q=0.9,en-US;q=0.8",
+    "content-type": "application/json",
+    "origin": "https://profilereports.quora.com",
+    "quora-broadcast-id": "main-w-chan49-8888-react_eutcerodozlwcvvu-6tZm",
+    "quora-canary-revision": "false",
+    "quora-formkey": "Ceenap3Bahkeineiyai8bei0iNoowaiF",
+    "quora-revision": "da20f600855d7b1c67fff91a8befd1ef700fbe96",
+    "quora-window-id": "react_eutcerodozlwcvvu",
+    "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
   }
 }
 EOF
@@ -924,12 +973,61 @@ EOF
       "source":"notif_page",
       "shouldLogClick":true
     }
+  },
+  "/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation": {
+    "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+    "extensions": {
+      "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+    },
+    "variables": {
+      "tribeId": 2841204,
+      "title": "{\"sections\":[{\"type\":\"plain\",\"spans\":[{\"text\":\"\",\"modifiers\":{}}],\"indent\":0,\"is_rtl\":false,\"quoted\":false}]}",
+      "content": "{\"sections\":[{\"type\":\"plain\",\"indent\":0,\"quoted\":false,\"is_rtl\":false,\"spans\":[{\"modifiers\":{},\"text\":\"test\"}]}]}",
+      "shouldQueue": true,
+      "accessOption": null,
+      "credentialId": 34699532
+    }
   }
 }
 EOF
     }
-
+#
     _report() {
+      _profile-report() {
+        echo 'def report_profile_report:
+{
+    "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+    "extensions": {
+      "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+    },
+    "variables": {
+      "tribeId": 2841204,
+      "title": {
+        "sections": [
+          {
+            "type": "plain",
+            "spans": [
+              {
+                "text": .title,
+                "modifiers": {}
+              }
+            ],
+            "indent": 0,
+            "is_rtl": false,
+            "quoted": false
+          }
+        ]
+      }|tojson,
+      "content": (.content|tojson),
+      "shouldQueue": true,
+      "accessOption": null,
+      "credentialId": null
+    }
+  }
+        ;
+        '
+      }
+
       _sweet-hot-girls() {
 
         echo 'def report_sweet_hot_girls:
@@ -945,44 +1043,29 @@ EOF
           "spans": [
             {
               "modifiers": {},
-              "text": "This profile is a so-called “sweethotgirls upvote spammer”.\n"
-            }
-          ]
-        },
-        {
-          "type": "plain",
-          "indent": 0,
-          "quoted": false,
-          "is_rtl": false,
-          "spans": [
-            {
-              "modifiers": {},
-              "text": "The profile generates large numbers of inauthentic upvotes across a large number of random answers at about a rate of 1 per minute. The profile contains a picture of a sexually attractive woman and a deceptive link to a site promising pornography &/or sex. It is clear the intent of the profile is to lure unsuspecting Quora users to visit a site which they might not otherwise visit."
-            }
-          ]
-        },
-        {
-          "type": "plain",
-          "indent": 0,
-          "quoted": false,
-          "is_rtl": false,
-          "spans": [
-            {
-              "modifiers": {},
-              "text": "Between \($activity.upvotes.first.timestamp) and \($activity.upvotes.last.timestamp) this profile submitted upto \($activity.upvotes.count) spammy upvotes."
-            }
-          ]
-        },
-        {
-          "type": "plain",
-          "indent": 0,
-          "quoted": false,
-          "is_rtl": false,
-          "spans": [
-            {
-              "modifiers": {},
-              "text": ("upvote#1 @ "+$activity.upvotes.first.timestamp)
+              "text": "This "
             },
+            {
+              "modifiers": {
+                "link": {
+                  "type": "url",
+                  "url": "https://www.quora.com\($activity.profileUrl)"
+                }
+              },
+              "text": "profile"
+            },
+            {
+              "modifiers": {},
+              "text": " generated upto \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
+            }
+          ]
+        },
+        {
+          "type": "unordered-list",
+          "indent": 0,
+          "quoted": false,
+          "is_rtl": false,
+          "spans": [
             {
               "modifiers": {
                 "link": {
@@ -990,20 +1073,16 @@ EOF
                   "url": "https://www.quora.com\($activity.upvotes.first.url)"
                 }
               },
-              "text": $activity.upvotes.first.text
+              "text": "\($activity.upvotes.first.timestamp) - #1"
             }
           ]
         },
         {
-          "type": "plain",
+          "type": "unordered-list",
           "indent": 0,
           "quoted": false,
           "is_rtl": false,
           "spans": [
-            {
-              "modifiers": {},
-              "text": ("upvote#"+($activity.upvotes.count|tostring)+" @ "+$activity.upvotes.last.timestamp)
-            },
             {
               "modifiers": {
                 "link": {
@@ -1011,11 +1090,7 @@ EOF
                   "url": "https://www.quora.com\($activity.upvotes.last.url)"
                 }
               },
-              "text": $activity.upvotes.last.text
-            },
-            {
-              "modifiers": {},
-              "text": " "
+              "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
             }
           ]
         },
@@ -1044,7 +1119,7 @@ EOF
                   "url": ("https://www.quora.com"+.)
                 }
               },
-              "text": ("https://www.quora.com"+.)
+              "text": (.|sub("/profile/";"")),
             },
             {
               "modifiers": {},
