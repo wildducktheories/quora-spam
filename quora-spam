@@ -37,7 +37,7 @@ _curl() {
     local cookie=$(_cookies)
     test -n "$cookie" || die "not logged in"
 
-    eval "$(echo "$o" | _ju pipe 'select method,path,data,headers,args|to env')"
+    eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
     (
       IFS=$'\t'
       set -- -H "cookie: $cookie" \
@@ -52,7 +52,8 @@ _curl() {
       if test -n "$data"; then
         set -- "$@" --data-raw "$data"
       fi
-      curl "$@" "https://www.quora.com$path"
+      host=${host:-www.quora.com}
+      curl "$@" "https://$host$path"
     )
 }
 
