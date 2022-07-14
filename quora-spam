@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export QUORA_SPAM_VERSION=v1.3
+export QUORA_SPAM_VERSION=v1.4-pre
 export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
 
 die() {
