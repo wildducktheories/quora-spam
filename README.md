@@ -212,8 +212,11 @@ However, if you cannot verify the `quora-spam` script is not malicious then you 
 In order to mitigate the risk of leaving Quora credentials sitting on your harddrive, the credentials, including credentials and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
 # RELEASE NOTES
-- 2002-07-12 - v1.3-pre
-	+ preparing for v1.3
+- 2002-07-12 - v1.3
+	+ versions prior to v1.2 had a hard-coded (and sensitive) quora-formkey header which prevented the software working for anyone but me
+	+ this key has now been invalidated, to prevent mis-use.
+	+ the git history prior to v1.3 has been rewritten to replace the sensitve value with rubbish
+	+ updated the filter to include additional spam detection expressions
 
 - 2002-07-12 - v1.2
 	+ add support for generating an activity summary for a profile
@@ -230,7 +233,10 @@ In order to mitigate the risk of leaving Quora credentials sitting on your hardd
 
 # DISCLAIMER
 
+
 While we have taken some care to ensure that this software does not abuse Quora's API, we make no claims as to whether use of this software complies with Quora's terms of service. Users concerned about this should do their own research and refrain from use of this software if they have any concerns.
+
+WARNING: On July 12, I observed that the https://www.quora.com/notifications/ page stopped being populated with the results of a graphql query. This also ulimately causes the mobile-web and mobile-app notifications function to stop working. On the web app, the I was still able to access https://www.quora.com/notifications/upvotes and https://www.quora.com/notifications/write. The problem did eventually rectify itself, so I am not 100% sure why this occurred and I don't know whether it was related to my use of this software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
