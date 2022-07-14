@@ -389,9 +389,9 @@ _logout() {
 _loop() {
     LOOP_DELAY=${LOOP_DELAY:-900}
     while true; do
-      echo -n "$(date)...processing..." 1>&2
+      echo "$(date)...processing..." 1>&2
       dispatch "$@"
-      echo -n "sleeping..." 1>&2
+      echo -n "$(date)...sleeping..." 1>&2
       sleep $LOOP_DELAY
       echo "" 1>&2
     done
