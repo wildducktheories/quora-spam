@@ -70,6 +70,16 @@ _curl() {
     test -n "$credentials" || die "not logged in"
 
     eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
+
+    case "$method" in
+      GET)
+        credentials=$(jq -n "$credentials"'|{"cookie": .cookie}')
+      ;;
+      *)
+        :
+      ;;
+    esac
+
     (
       IFS=$'\t'
       set -- \
