@@ -189,7 +189,7 @@ _filter() {
     }
 
     _sweet-hot-girls() {
-        jq -c 'select(.links|any(contains("sweethotgirls")))|.isSpam=true'
+        jq -c 'select(.links|any(contains("sweethotgirls") or contains("hotsweetgirls")))|.isSpam=true'
     }
 
     dispatch "$@"
@@ -809,7 +809,7 @@ _report() {
                   _post markAsRead "$sncid"
                 fi
                 if test "$isBlockedByViewer" = "false"; then
-                  _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls link (sncid:$sncid)" | jq -c .;
+                  _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
                   _file-profile-report "$profileUrl"
                 fi
                 if test "$viewerHasMuted" = "false"; then
