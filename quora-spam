@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o pipefail
+
 export QUORA_SPAM_VERSION=v1.5-pre
 export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
 
