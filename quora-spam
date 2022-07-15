@@ -818,8 +818,8 @@ _query() {
     _upvotes() {
         _curl \
           method:GET \
-          path:'/notifications/upvotes' \
-          headers:"$(_template headers /notifications/upvotes)" \
+          "path:$(_explode exec path upvotes)" \
+          "headers:$(_explode exec headers upvotes)" \
         | _filter html
     }
 
@@ -1441,6 +1441,27 @@ _explodeable() {
               *sec_fetch_document_navigate_same_origin
               *upgrade_insecure_requests
               *user_agent'
+      }
+
+      _requirements() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _upvotes() {
+      _headers() {
+        echo 'accept
+              *cache_control_max_age_0
+              *sec_ch_ua
+              *sec_fetch_document_navigate_same_origin
+              *upgrade_insecure_requests
+              *user_agent'
+      }
+
+      _path() {
+        echo '"/notifications/upvotes"'
       }
 
       _requirements() {
