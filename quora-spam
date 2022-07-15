@@ -729,7 +729,7 @@ _query() {
         local profile=${1#/profile/}
         _curl \
           method:GET \
-          path:"/profile/$profile" \
+          path:"/profile/ $(echo "$profile" | jq -Rr @uri)"\
           headers:"$(_template headers '/profile/$profile')" \
           args:'["-L"]' \
           | _filter html \
