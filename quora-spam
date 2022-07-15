@@ -1311,6 +1311,115 @@ _explodeable() {
   }
 
   _templates() {
+    _accept() {
+      _headers() {
+        jq -nc '{
+          "accept": "*/*",
+          "accept-encoding": "gzip, deflate, br",
+          "accept-language": "en-AU,en;q=0.9,en-US;q=0.8"
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _sec_ch_ua() {
+      _headers() {
+        jq -nc '{
+          "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": "\"macOS\"",
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _origin() {
+      _headers() {
+        echo '{"origin": "https://www.quora.com"}'
+      }
+      dispatch "$@"
+    }
+
+    _content_type_json() {
+      _headers() {
+        echo '{"content-type": "application/json"}'
+      }
+      dispatch "$@"
+    }
+
+    _cache_control_max_age_0() {
+      echo '{"cache-control": "max-age=0"}'
+    }
+
+    _sec_fetch_document_navigate_same_origin() {
+      echo '
+        {
+          "sec-fetch-dest": "document",
+          "sec-fetch-mode": "navigate",
+          "sec-fetch-site": "same-origin"
+        }
+      '
+    }
+
+    _sec_fetch_empty_cors_same_origin() {
+      _headers() {
+        jq -nc '{
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+          "sec-fetch-user": "?1",
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _upgrade_insecure_requests() {
+      _headers() {
+        echo '{"upgrade-insecure-requests": "1"}'
+      }
+
+      dispatch "$@"
+    }
+
+    _user_agent() {
+      _headers() {
+        echo '{"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"}'
+      }
+      dispatch "$@"
+    }
+
+    _lib() {
+      _requirements() {
+        jq -nc '{
+          "headers": [
+            "accept",
+            "cache_control_max_age_0",
+            "content_type_json",
+            "origin",
+            "sec_ch_ua",
+            "sec_fetch_document_navigate_same_origin",
+            "sec_fetch_empty_cors_same_origin",
+            "upgrade_insecure_requests",
+            "user_agent"
+          ]
+        }'
+      }
+
+      _headers() {
+        echo '
+          .;
+          def quora(ch;w;s;r):
+            {
+              "quora-broadcast-id": (ch+"-"+w+"-"+s),
+              "quora-canary-revision": "false",
+              "quora-revision": r,
+              "quora-window-id": w
+            }
+        '
+      }
+
+      dispatch "$@"
+    }
 
     dispatch "$@"
   }
