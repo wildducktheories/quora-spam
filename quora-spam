@@ -119,30 +119,27 @@ _file-profile-report() {
   if test "$is_enabled" = "true"; then
     local uid=$(_query uid $profile)
     test -n "$uid" || die "file-profile-report: usage: ... {profileUrl}"
-    content=$(jq -n \
-      --argjson "activity" "$(
-        quora-spam query activity-summary $uid
-      )" \
-      --argjson "others" "$(
-          quora-spam query sweet-hot-girls | jq -sc --arg 'profile' "$profile" 'map(.profileUrl|select(.|contains($profile)|not))'
-      )" \
-      '{"activity": $activity, "others": $others}' \
-      | quora-spam apply-template report sweet-hot-girls \
-      | jq -c
-    )
-    host=profilereports.quora.com
-    title="profile: ($profile, $uid)"
-    body=$(_ju o "title:$title" "content:$content" | _apply-template report profile-report | jq -c .)
-    path='/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation'
-    headers=$(_template headers "$path")
 
+    title="profile: ($profile, $uid)"
+    activity="$(quora-spam query activity-summary $uid)"
+    others="$(quora-spam query sweet-hot-girls \
+          | jq \
+              -sc \
+              --arg 'profile' "$profile" \
+            'map(.profileUrl|select(.|contains($profile)|not))')"
+
+    data="$(_ju o "activity:$activity" "title:$title" "others:$others" | _explode exec --stdin body mutation_post_add)"
+    headers=$(_explode exec headers mutation_post_add)
+    host=$(_explode exec host mutation_post_add)
+    path=$(_explode exec path mutation_post_add)
     (
       QUORA_CREDENTIALS=$(_submit-credentials) _curl \
+        data:"$data" \
+        headers:"$headers" \
         host:$host \
         method:POST \
         path:"$path" \
-        headers:"$headers" \
-        data:"$body" >/dev/null
+        >/dev/null
 
       _ju o uid:$uid
    )
@@ -1328,6 +1325,13 @@ _explodeable() {
       dispatch "$@"
     }
 
+    _origin_profile_reports() {
+      _headers() {
+        echo '{"origin": "https://profilereports.quora.com"}'
+      }
+      dispatch "$@"
+    }
+
     _content_type_json() {
       _headers() {
         echo '{"content-type": "application/json"}'
@@ -1384,6 +1388,7 @@ _explodeable() {
             "cache_control_max_age_0",
             "content_type_json",
             "origin",
+            "origin_profile_reports",
             "sec_ch_ua",
             "sec_fetch_document_navigate_same_origin",
             "sec_fetch_empty_cors_same_origin",
@@ -1442,6 +1447,69 @@ _explodeable() {
 
       _requirements() {
         echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _mutation_post_add() {
+
+      _host() {
+        echo '"profilereports.quora.com"'
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
+      }
+
+      _body() {
+        echo '
+          {
+            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+            "extensions": {
+              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+            },
+            "variables": {
+              "tribeId": 2841204,
+              "title": {
+                "sections": [
+                  {
+                    "type": "plain",
+                    "spans": [
+                      {
+                        "text": .title,
+                        "modifiers": {}
+                      }
+                    ],
+                    "indent": 0,
+                    "is_rtl": false,
+                    "quoted": false
+                  }
+                ]
+              }|tojson,
+              "content": (profile_report_contents|tojson),
+              "shouldQueue": (.shouldQueue//true),
+              "accessOption": null,
+              "credentialId": null
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin_profile_reports
+          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _requirements() {
+        _ju o 'body:["profile_report_contents"]' 'headers:["lib"]'
       }
 
       dispatch "$@"
@@ -1573,6 +1641,126 @@ _explodeable() {
       }
 
       dispatch "$@"
+    }
+
+    _profile_report_contents() {
+      _body() {
+        echo '
+          .activity as $activity
+          |.others as $others
+          |{
+              "sections": [
+                {
+                  "type": "plain",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {},
+                      "text": "This "
+                    },
+                    {
+                      "modifiers": {
+                        "link": {
+                          "type": "url",
+                          "url": "https://www.quora.com\($activity.profileUrl)"
+                        }
+                      },
+                      "text": "profile"
+                    },
+                    {
+                      "modifiers": {},
+                      "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
+                    }
+                  ]
+                },
+                {
+                  "type": "unordered-list",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {
+                        "link": {
+                          "type": "url",
+                          "url": "https://www.quora.com\($activity.upvotes.first.url)"
+                        }
+                      },
+                      "text": "\($activity.upvotes.first.timestamp) - #1"
+                    }
+                  ]
+                },
+                {
+                  "type": "unordered-list",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {
+                        "link": {
+                          "type": "url",
+                          "url": "https://www.quora.com\($activity.upvotes.last.url)"
+                        }
+                      },
+                      "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
+                    }
+                  ]
+                },
+                {
+                  "type": "plain",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {},
+                      "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
+                    }
+                  ]
+                },
+                ($others|map({
+                  "type": "unordered-list",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {
+                        "link": {
+                          "type": "url",
+                          "url": ("https://www.quora.com"+.)
+                        }
+                      },
+                      "text": (.|sub("/profile/";"")),
+                    },
+                    {
+                      "modifiers": {},
+                      "text": "\n"
+                    }
+                  ]
+                  }))
+              ]|flatten,
+            "caret": {
+              "start": {
+                "spanIdx": 0,
+                "sectionIdx": 0,
+                "offset": 12
+              },
+              "end": {
+                "spanIdx": 0,
+                "sectionIdx": 0,
+                "offset": 12
+              }
+            }
+          }
+        '
+      }
+
+      dispatch "$@"
+
     }
 
 
