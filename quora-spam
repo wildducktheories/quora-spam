@@ -195,7 +195,18 @@ _filter() {
             .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
             |select(.modifiers.link!=null)|{"text":.text, "url":.modifiers.link.url}
          ]
-      }'
+      }|.isSpammyUrl=(
+          .links
+          |any(
+               (  .text as $text
+                  |(
+                      (.url|startswith("http"))
+                      and (.url|startswith("https://www.quora.com")|not)
+                      and (.url|contains($text)|not)
+                  )
+               )
+          )
+      )'
     }
 
     _sweet-hot-girls() {
