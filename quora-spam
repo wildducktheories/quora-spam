@@ -756,12 +756,20 @@ _query() {
     _profile() {
         local profile=${1#/profile/}
         _curl \
-          method:GET \
-          path:"/profile/ $(echo "$profile" | jq -Rr @uri)"\
-          headers:"$(_template headers '/profile/$profile')" \
           args:'["-L"]' \
+          method:GET \
+          "headers:$(_explode exec headers profile)" \
+          "path:$(ju o profileUrl:"$profile" | _explode exec --stdin path profile)" \
           | _filter html \
-          | jq 'select(.data.user.descriptionQtextDocument.legacyJson)|.data.user.descriptionQtextDocument.legacyJson|=fromjson'
+          | jq '
+            select(.data.user)
+            |(
+              if .data.user.descriptionQtextDocument.legacyJson then
+                .data.user.descriptionQtextDocument.legacyJson|=fromjson
+              else
+                .
+              end
+            )'
     }
 
     _simple-followers() {
@@ -1416,6 +1424,27 @@ _explodeable() {
               "quora-window-id": w
             }
         '
+      }
+
+      dispatch "$@"
+    }
+
+    _profile() {
+      _path() {
+        echo '"/profile/"+(.profileUrl|@uri)'
+      }
+
+      _headers() {
+        echo 'accept
+              *cache_control_max_age_0
+              *sec_ch_ua
+              *sec_fetch_document_navigate_same_origin
+              *upgrade_insecure_requests
+              *user_agent'
+      }
+
+      _requirements() {
+        echo '{"headers":["lib"]}'
       }
 
       dispatch "$@"
