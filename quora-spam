@@ -193,13 +193,21 @@ _filter() {
         "isSpam": false,
         "links": [
             .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
-            |select(.modifiers.link!=null)|.text
+            |select(.modifiers.link!=null)|{"text":.text, "url":.modifiers.link.url}
          ]
       }'
     }
 
     _sweet-hot-girls() {
-        jq -c 'select(.links|any(contains("sweethotgirls") or contains("hotsweetgirls")))|.isSpam=true'
+        jq -c 'select(
+          .links
+          |any(
+            (.text|startswith("sweethot"))
+            or (.text|contains("hotgirls"))
+            or (.text|startswith("hot"))
+            or (.url|contains("applycisra.com"))
+          )
+        )|.isSpam=true'
     }
 
     dispatch "$@"
