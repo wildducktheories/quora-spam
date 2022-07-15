@@ -165,6 +165,13 @@ _filter() {
         | jq -r .
     }
 
+    _jqc() {
+      # strip leading, trailing whitespace,
+      # delete empty lines
+      # join lines not separateed by trailing ;
+      tr \\011 ' ' | sed 's/^ *//;s/ *$//g;s/ *; *$/;/;/^$/d;' | awk '!/;$/{printf $0}/;$/'
+    }
+
     _simple-notifications() {
       jq -c '
           .data.viewer.sentNotifCollectionsConnection.edges[].node
