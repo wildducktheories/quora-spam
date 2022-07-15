@@ -625,26 +625,20 @@ _ju() {
 
 _post() {
     _mute() {
-        local uid=$1
+      local uid=$1
 
-        local data="$(
-          _template body /graphql/gql_POST?q=UserMute_userMute_Mutation | \
-          jq -c --argjson uid "$uid" '.variables.uid=$uid'
-        )"
-        local path='/graphql/gql_POST?q=UserMute_userMute_Mutation'
+      test -n "$uid" || die "usage: post mute {uid}"
 
-        _curl \
-          method:POST \
-          path:"$path" \
-          headers:"$(_template headers "$path")" \
-          data:"$data" \
-          | jq -c --arg uid "$uid" '
-                {
-                    "uid": $uid,
-                    "viewerHasMuted": .data.userMute.user.viewerHasMuted
-                }'
-
-
+      _curl \
+        method:POST \
+        path:"$(_explode exec path mutation_user_mute)" \
+        headers:"$(_explode exec headers mutation_user_mute)" \
+        data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_mute)" \
+        | jq -c --arg uid "$uid" '
+              {
+                  "uid": $uid,
+                  "viewerHasMuted": .data.userMute.user.viewerHasMuted
+              }'
     }
 
     _markAsRead() {
@@ -1452,6 +1446,44 @@ _explodeable() {
 
       _path() {
         echo '"/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation"'
+      }
+
+      _requirements() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    # /graphql/gql_POST?q=UserMute_userMute_Mutation
+    _mutation_user_mute() {
+      _body() {
+        echo '{
+            "queryName": "UserMute_userMute_Mutation",
+            "extensions": {
+              "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
+            },
+            "variables": {
+              "uid": .uid
+            }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("ain-w-chan50-8888";"react_kudnreowtdanpzoc";"Gj7m";"906b08c33432ec92a44754fc91a61a035a43a5e0")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+        :
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UserMute_userMute_Mutation"'
       }
 
       _requirements() {
