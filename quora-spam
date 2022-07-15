@@ -741,7 +741,7 @@ _query() {
           headers:"$(_template headers '/profile/$profile')" \
           args:'["-L"]' \
           | _filter html \
-          | jq '.data.user.descriptionQtextDocument.legacyJson|=fromjson'
+          | jq 'select(.data.user.descriptionQtextDocument.legacyJson)|.data.user.descriptionQtextDocument.legacyJson|=fromjson'
     }
 
     _simple-followers() {
