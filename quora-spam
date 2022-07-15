@@ -673,22 +673,17 @@ _post() {
 
     _markAsRead() {
       local sncid="$1"
-      local path='/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation'
-      local data="$(
-        _template body "$path" \
-        | jq -c --argjson sncid "$sncid" '
-          .variables.sncid=$sncid
-      ')"
 
+      test -n "$sncid" || die "usage: post markAsRead {sncid}"
       _curl \
         method:POST \
-        path:"$path" \
-        headers:"$(_template headers "$path")" \
-        data:"$data" \
+        path:"$(_explode exec path mutation_notification_markAsRead)" \
+        headers:"$(_explode exec headers mutation_notification_markAsRead)" \
+        data:"$(_ju o sncid:$sncid | _explode exec --stdin body mutation_notification_markAsRead)" \
         | jq -c --argjson sncid "$sncid" '
         {
             "sncid": $sncid,
-            "isRead": .data.markSentNotifCollectionAsRead.sentNotifCollection.isRead
+            "isRead": (.data.markSentNotifCollectionAsRead.sentNotifCollection.isRead//false)
         }'
 
     }
@@ -1433,6 +1428,44 @@ _explodeable() {
               "quora-window-id": w
             }
         '
+      }
+
+      dispatch "$@"
+    }
+
+    _mutation_notification_markAsRead() {
+      _body() {
+        echo '{
+            "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
+            "extensions":{
+              "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
+            },
+            "variables":{
+              "sncid":.sncid,
+              "source":"notif_page",
+              "shouldLogClick":true
+            }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_pxemluvapjrirdhr";"UQaz";"b9c9c3eca0656a91bd2c1aa588dcc28495fe1684")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation"'
+      }
+
+      _requirements() {
+        echo '{"headers":["lib"]}'
       }
 
       dispatch "$@"
