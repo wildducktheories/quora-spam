@@ -68,6 +68,8 @@ _config() {
 _curl() {
     local o="$(_ju o "$@")"
 
+    local debug=$(if test -n "$CURL_DEBUG"; then echo true; else echo false; fi)
+
     local credentials=$(_credentials)
     test -n "$credentials" || die "not logged in"
 
@@ -82,10 +84,16 @@ _curl() {
       ;;
     esac
 
-    (
+    if $debug && test -n "$data"; then
+      : #echo "$data" | jq -c '["DEBUG", .]' 1>&2
+    fi
+
+    local output=
+    output=$(
       IFS=$'\t'
       set -- \
         --compressed \
+       ${CURL_DEBUG:+-v} \
         -s \
         $(
           (
@@ -99,7 +107,8 @@ _curl() {
       fi
       host=${host:-www.quora.com}
       curl "$@" "https://$host$path"
-    )
+    )||die "curl: failed rc=$?"
+    echo "$output" 
 }
 
 _file-profile-report() {
