@@ -643,32 +643,8 @@ _post() {
                     "uid": $uid,
                     "viewerHasMuted": .data.userMute.user.viewerHasMuted
                 }'
-    }
 
-    _report() {
-        local uid=$1
-        shift 1
-        message="$*"
-        message="${message:-Spammy link in profile.}"
 
-        local path='/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation'
-        local data=$(
-          _template body "$path" \
-          | jq -c --arg message "$message" --argjson uid "$uid" '
-            .variables.comment|=fromjson
-            |.variables.comment.sections[0].spans[0].text|=$message
-            |.variables.comment|=tojson
-            |.variables.reportableId=$uid
-        ')
-        _curl \
-          method:POST \
-          path:"$path" \
-          headers:"$(_template headers "$path")" \
-          data:"$data" \
-          | jq -c --arg uid "$uid" '{
-               "uid": $uid,
-               "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
-          }'
     }
 
     _markAsRead() {
@@ -687,6 +663,20 @@ _post() {
         }'
 
     }
+
+    _report() {
+        local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
+        _curl \
+          method:POST \
+          path:"$(_explode exec path mutation_report_add)" \
+          headers:"$(_explode exec headers mutation_report_add)" \
+          data:"$data" \
+          | jq -c --arg uid "$uid" '{
+               "uid": $uid,
+               "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
+          }'
+    }
+
 
     _activity() {
       eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
@@ -859,7 +849,7 @@ _report() {
                   _post markAsRead "$sncid"
                 fi
                 if test "$isBlockedByViewer" = "false"; then
-                  _post report "$uid" "Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
+                  _post report "uid:$uid" "message:Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
                   _file-profile-report "$profileUrl"
                 fi
                 if test "$viewerHasMuted" = "false"; then
@@ -1469,6 +1459,75 @@ _explodeable() {
       }
 
       dispatch "$@"
+    }
+
+    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
+    _mutation_report_add() {
+      _body() {
+          echo '{
+            "queryName": "ReportModalInner_reportAdd_Mutation",
+            "extensions": {
+              "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+            },
+            "variables": {
+              "reason": "spam",
+              "targetType": "user",
+              "reportableId": .uid,
+              "comment": {
+                "sections": [
+                  {
+                    "type": "plain",
+                    "indent": 0,
+                    "quoted": false,
+                    "is_rtl": false,
+                    "spans": [
+                      {
+                        "modifiers": {},
+                        "text": .message
+                      }
+                    ]
+                  }
+                ],
+                "caret": {
+                  "start": {
+                    "spanIdx": 0,
+                    "sectionIdx": 0,
+                    "offset": 59
+                  },
+                  "end": {
+                    "spanIdx": 0,
+                    "sectionIdx": 0,
+                    "offset": 59
+                  }
+                }
+              }
+            }
+          }|.variables.comment|=tojson'
+
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
+      }
+
+      _requirements() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+
     }
 
     _profile() {
