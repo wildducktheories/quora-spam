@@ -1,5 +1,5 @@
 FROM alpine:latest
-RUN apk add bash jq curl make docker
+RUN apk add bash jq curl make docker coreutils
 RUN adduser -D -h /home/quora-spam quora-spam
 ENV LAUNCH_DOCKER=false
 ADD quora-spam /usr/local/bin

@@ -1288,6 +1288,102 @@ EOF
     esac
 }
 
+_explodeable() {
+
+  _requirements() {
+    echo '{
+      "path": [],
+      "body": [],
+      "headers": []
+    }'
+  }
+
+  _body() {
+    echo "empty"
+  }
+
+  _path() {
+    echo '""'
+  }
+
+  _headers() {
+    echo "{}"
+  }
+
+  _templates() {
+
+    dispatch "$@"
+  }
+
+  local template=$1
+  local part=$2
+
+  dispatch templates "$template" "$part"
+}
+
+# explodes template
+_explode() {
+  EXPLODEABLE=${EXPLODEABLE:-_explodeable}
+
+  _body() {
+    local template=$1
+    _part "body" "$template"
+  }
+
+  _exec() {
+    local use_stdin=false
+    if test "$1" = "--stdin"; then
+      use_stdin=true
+      shift 1
+    fi
+    local template=$(dispatch "$@")
+    if $use_stdin; then
+      jq -c "$template"
+    else
+      jq -nc "$template"
+    fi
+  }
+
+  _headers() {
+    local template=$1
+    _part "headers" "$template"
+  }
+
+  _part() {
+    local part=$1
+    local template=$2
+
+    for r in $(_explode requirements "$part" "$template" | tsort); do
+      echo "def $r:"
+      ${EXPLODEABLE} "$r" "$part" | sed "s/^/  /"
+      echo ";"
+    done | _filter jqc
+    echo $template
+  }
+
+  _path() {
+    local template=$1
+    _part "path" "$template"
+  }
+
+  _requirements() {
+    local part=$1
+    local template=$2
+    local dependency
+
+    ($TEMPLATE  "$template" requirements) \
+    | jq -r --arg part "$part" '(.[$part]//[])|.[]' \
+    | tr ' ' \\012 \
+    | while read dependency; do
+      (_explode requirements "$part" "$dependency" )
+      echo "$dependency" "$template"
+    done
+    echo "$template" "$template"
+  }
+
+  dispatch "$@"
+}
+
 __to() {
     _curl-args() {
       jq -r '
