@@ -1394,28 +1394,18 @@ _explodeable() {
 _explode() {
   EXPLODEABLE=${EXPLODEABLE:-_explodeable}
 
-  _body() {
-    local template=$1
-    _part "body" "$template"
-  }
-
   _exec() {
     local use_stdin=false
     if test "$1" = "--stdin"; then
       use_stdin=true
       shift 1
     fi
-    local template=$(dispatch "$@")
+    local template=$(dispatch part "$@")
     if $use_stdin; then
       jq -c "$template"
     else
       jq -nc "$template"
     fi
-  }
-
-  _headers() {
-    local template=$1
-    _part "headers" "$template"
   }
 
   _part() {
@@ -1428,11 +1418,6 @@ _explode() {
       echo ";"
     done | _filter jqc
     echo $template
-  }
-
-  _path() {
-    local template=$1
-    _part "path" "$template"
   }
 
   _requires() {
@@ -1449,6 +1434,16 @@ _explode() {
     done
     echo "$template" "$template"
   }
+
+  cmd=$1
+  case "$cmd" in
+    exec|requires|part)
+      :
+    ;;
+    *)
+      set -- part "$@"
+    ;;
+  esac
 
   dispatch "$@"
 }
