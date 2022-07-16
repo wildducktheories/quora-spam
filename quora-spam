@@ -832,12 +832,8 @@ _shell() {
 
 _explodeable() {
 
-  _requirements() {
-    echo '{
-      "path": [],
-      "body": [],
-      "headers": []
-    }'
+  _requires() {
+    echo '{"path":[],"body":[],"headers":[]}'
   }
 
   _body() {
@@ -938,7 +934,7 @@ _explodeable() {
     }
 
     _lib() {
-      _requirements() {
+      _requires() {
         jq -nc '{
           "headers": [
             "accept",
@@ -1002,7 +998,7 @@ _explodeable() {
         echo '"/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation"'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers":["lib"]}'
       }
 
@@ -1065,7 +1061,7 @@ _explodeable() {
         '
       }
 
-      _requirements() {
+      _requires() {
         _ju o 'body:["profile_report_contents"]' 'headers:["lib"]'
       }
 
@@ -1103,7 +1099,7 @@ _explodeable() {
         echo '"/graphql/gql_POST?q=UserMute_userMute_Mutation"'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers":["lib"]}'
       }
 
@@ -1171,7 +1167,7 @@ _explodeable() {
         echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers":["lib"]}'
       }
 
@@ -1195,7 +1191,7 @@ _explodeable() {
               *user_agent'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers":["lib"]}'
       }
 
@@ -1357,7 +1353,7 @@ _explodeable() {
         echo '"/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers": ["lib"]}'
       }
 
@@ -1378,7 +1374,7 @@ _explodeable() {
         echo '"/notifications/upvotes"'
       }
 
-      _requirements() {
+      _requires() {
         echo '{"headers":["lib"]}'
       }
 
@@ -1426,7 +1422,7 @@ _explode() {
     local part=$1
     local template=$2
 
-    for r in $(_explode requirements "$part" "$template" | tsort); do
+    for r in $(_explode requires "$part" "$template" | tsort); do
       echo "def $r:"
       ${EXPLODEABLE} "$r" "$part" | sed "s/^/  /"
       echo ";"
@@ -1439,16 +1435,16 @@ _explode() {
     _part "path" "$template"
   }
 
-  _requirements() {
+  _requires() {
     local part=$1
     local template=$2
     local dependency
 
-    ($TEMPLATE  "$template" requirements) \
+    ($EXPLODEABLE "$template" requires) \
     | jq -r --arg part "$part" '(.[$part]//[])|.[]' \
     | tr ' ' \\012 \
     | while read dependency; do
-      (_explode requirements "$part" "$dependency" )
+      (_explode requires "$part" "$dependency" )
       echo "$dependency" "$template"
     done
     echo "$template" "$template"
