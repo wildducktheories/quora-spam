@@ -212,6 +212,11 @@ However, if you cannot verify the `quora-spam` script is not malicious then you 
 In order to mitigate the risk of leaving Quora credentials sitting on your harddrive, the credentials, including credentials and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
 # RELEASE NOTES
+- 2002-07-16 - v1.5
+	+ replaced 'template' with 'explode' and 'explodeable'
+	+ reworked all curl calls to use 'explode'
+	+ whitespace fixes
+
 - 2002-07-15 - v1.4
 	+ adjusted spam filter to deal with emerging variants
 	+ cope with non-ASCII characters in profile URLs
