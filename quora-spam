@@ -6,22 +6,22 @@ export QUORA_SPAM_VERSION=v1.5-pre
 export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
 
 die() {
-    echo -e "fatal: $*" 1>&2
-    exit ${DIE_RC:-1}
+  echo -e "fatal: $*" 1>&2
+  exit ${DIE_RC:-1}
 }
 
 dispatch () {
-    local cmd=$1
-    shift 1
-    set -- "_$cmd" "$@"
-    "$@"
+  local cmd=$1
+  shift 1
+  set -- "_$cmd" "$@"
+  "$@"
 }
 
 _credentials() {
-    if test -z "$QUORA_CREDENTIALS"; then
-      export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
-    fi
-    echo "$QUORA_CREDENTIALS"
+  if test -z "$QUORA_CREDENTIALS"; then
+    export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
+  fi
+  echo "$QUORA_CREDENTIALS"
 }
 
 _submit-credentials() {
@@ -57,49 +57,49 @@ _config() {
 }
 
 _curl() {
-    local o="$(_ju o "$@")"
+  local o="$(_ju o "$@")"
 
-    local debug=$(if test -n "$CURL_DEBUG"; then echo true; else echo false; fi)
+  local debug=$(if test -n "$CURL_DEBUG"; then echo true; else echo false; fi)
 
-    local credentials=$(_credentials)
-    test -n "$credentials" || die "not logged in"
+  local credentials=$(_credentials)
+  test -n "$credentials" || die "not logged in"
 
-    eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
+  eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
 
-    case "$method" in
-      GET)
-        credentials=$(jq -n "$credentials"'|{"cookie": .cookie}')
-      ;;
-      *)
-        :
-      ;;
-    esac
+  case "$method" in
+    GET)
+      credentials=$(jq -n "$credentials"'|{"cookie": .cookie}')
+    ;;
+    *)
+      :
+    ;;
+  esac
 
-    if $debug && test -n "$data"; then
-      : #echo "$data" | jq -c '["DEBUG", .]' 1>&2
+  if $debug && test -n "$data"; then
+    : #echo "$data" | jq -c '["DEBUG", .]' 1>&2
+  fi
+
+  local output=
+  output=$(
+    IFS=$'\t'
+    set -- \
+      --compressed \
+     ${CURL_DEBUG:+-v} \
+      -s \
+      $(
+        (
+          echo "$args";
+          echo "$headers";
+          echo "$credentials";
+        ) | __to curl-args
+      )
+    if test -n "$data"; then
+      set -- "$@" --data-raw "$data"
     fi
-
-    local output=
-    output=$(
-      IFS=$'\t'
-      set -- \
-        --compressed \
-       ${CURL_DEBUG:+-v} \
-        -s \
-        $(
-          (
-              echo "$args";
-              echo "$headers";
-              echo "$credentials";
-          ) | __to curl-args
-        )
-      if test -n "$data"; then
-        set -- "$@" --data-raw "$data"
-      fi
-      host=${host:-www.quora.com}
-      curl "$@" "https://$host$path"
-    )||die "curl: failed rc=$?"
-    echo "$output" 
+    host=${host:-www.quora.com}
+    curl "$@" "https://$host$path"
+  )||die "curl: failed rc=$?"
+  echo "$output" 
 }
 
 _file-profile-report() {
@@ -141,98 +141,98 @@ _file-profile-report() {
 
 _filter() {
 
-    _activity-summary() {
-      jq '
-        .data.user.activityConnection.edges[].node as $node
-        |$node.feedReason
-        |select(.__isFeedReason=="UserUpvotedAnswerReason")
-        |.uid=.userNames[0].uid
-        |.timestamp|=(./1000000|round|todateiso8601)
-        |.profileUrl=.userNames[0].profileUrl
-        |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
-      ' \
-      | ju select 'uid,url,text,timestamp,profileUrl'
-    }
+  _activity-summary() {
+    jq '
+      .data.user.activityConnection.edges[].node as $node
+      |$node.feedReason
+      |select(.__isFeedReason=="UserUpvotedAnswerReason")
+      |.uid=.userNames[0].uid
+      |.timestamp|=(./1000000|round|todateiso8601)
+      |.profileUrl=.userNames[0].profileUrl
+      |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
+    ' \
+    | ju select 'uid,url,text,timestamp,profileUrl'
+  }
 
-    _html() {
-        grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
-        | tail -1 \
-        | sed "s/;\$//" \
-        | sed "s/^[^=]*= //" \
-        | jq -r .
-    }
+  _html() {
+    grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
+    | tail -1 \
+    | sed "s/;\$//" \
+    | sed "s/^[^=]*= //" \
+    | jq -r .
+  }
 
-    _jqc() {
-      # strip leading, trailing whitespace,
-      # delete empty lines
-      # join lines not separateed by trailing ;
+  _jqc() {
+    # strip leading, trailing whitespace,
+    # delete empty lines
+    # join lines not separateed by trailing ;
 
-      if test -z "$JQC"; then
-        tr \\011 ' ' | sed 's/^ *//;s/ *$//g;s/ *; *$/;/;/^$/d;' | awk '!/;$/{printf $0}/;$/'
-      else
-        ${JQC}
-      fi
-    }
+    if test -z "$JQC"; then
+      tr \\011 ' ' | sed 's/^ *//;s/ *$//g;s/ *; *$/;/;/^$/d;' | awk '!/;$/{printf $0}/;$/'
+    else
+      ${JQC}
+    fi
+  }
 
-    _simple-notifications() {
-      jq -c '
-          .data.viewer.sentNotifCollectionsConnection.edges[].node
-          |{
-              "sncid": .sncid,
-              "uid": (.responsibleUser.uid|tostring),
-              "profileUrl": .userImageUser.profileUrl,
-              "isSpam": false,
-              "isRead": .isRead
-          }'
-    }
+  _simple-notifications() {
+    jq -c '
+        .data.viewer.sentNotifCollectionsConnection.edges[].node
+        |{
+            "sncid": .sncid,
+            "uid": (.responsibleUser.uid|tostring),
+            "profileUrl": .userImageUser.profileUrl,
+            "isSpam": false,
+            "isRead": .isRead
+        }'
+  }
 
-    _simple-profiles() {
-        jq -c . \
-        | while read profile; do
-            eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
-            jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
-        done
-    }
+  _simple-profiles() {
+    jq -c . \
+    | while read profile; do
+        eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
+        jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
+    done
+  }
 
-    # converts a full profile into a simple profile
-    _full-to-simple-profile() {
-      jq -c '{
-        "uid": .data.user.uid,
-        "profileUrl":.data.user.profileUrl,
-        "isBlockedByViewer": .data.user.isBlockedByViewer,
-        "viewerHasMuted": .data.user.viewerHasMuted,
-        "isSpam": false,
-        "links": [
-            .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
-            |select(.modifiers.link!=null)|{"text":.text, "url":.modifiers.link.url}
-         ]
-      }|.isSpammyUrl=(
-          .links
-          |any(
-               (  .text as $text
-                  |(
-                      (.url|startswith("http"))
-                      and (.url|startswith("https://www.quora.com")|not)
-                      and (.url|contains($text)|not)
-                  )
-               )
-          )
-      )'
-    }
+  # converts a full profile into a simple profile
+  _full-to-simple-profile() {
+    jq -c '{
+      "uid": .data.user.uid,
+      "profileUrl":.data.user.profileUrl,
+      "isBlockedByViewer": .data.user.isBlockedByViewer,
+      "viewerHasMuted": .data.user.viewerHasMuted,
+      "isSpam": false,
+      "links": [
+          .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
+          |select(.modifiers.link!=null)|{"text":.text, "url":.modifiers.link.url}
+       ]
+    }|.isSpammyUrl=(
+        .links
+        |any(
+             (  .text as $text
+                |(
+                    (.url|startswith("http"))
+                    and (.url|startswith("https://www.quora.com")|not)
+                    and (.url|contains($text)|not)
+                )
+             )
+        )
+    )'
+  }
 
-    _sweet-hot-girls() {
-        jq -c 'select(
-          .links
-          |any(
-            (.text|startswith("sweethot"))
-            or (.text|contains("hotgirls"))
-            or (.text|startswith("hot"))
-            or (.url|contains("applycisra.com"))
-          )
-        )|.isSpam=true'
-    }
+  _sweet-hot-girls() {
+    jq -c 'select(
+      .links
+      |any(
+        (.text|startswith("sweethot"))
+        or (.text|contains("hotgirls"))
+        or (.text|startswith("hot"))
+        or (.url|contains("applycisra.com"))
+      )
+    )|.isSpam=true'
+  }
 
-    dispatch "$@"
+  dispatch "$@"
 }
 
 _har() {
@@ -417,417 +417,417 @@ _logout() {
 }
 
 _loop() {
-    LOOP_DELAY=${LOOP_DELAY:-900}
-    while true; do
-      echo "$(date)...processing..." 1>&2
-      dispatch "$@"
-      echo -n "$(date)...sleeping..." 1>&2
-      sleep $LOOP_DELAY
-      echo "" 1>&2
-    done
+  LOOP_DELAY=${LOOP_DELAY:-900}
+  while true; do
+    echo "$(date)...processing..." 1>&2
+    dispatch "$@"
+    echo -n "$(date)...sleeping..." 1>&2
+    sleep $LOOP_DELAY
+    echo "" 1>&2
+  done
 }
 
 
 _ju() {
-    _from() {
-        _keys() {
-          local default=${1:-null}
-          jq -Rsc --argjson default "$default" '
-            rtrimstr("\n")
-            |split("\n")
-            |[
-              .[]|{"key": ., "value": $default}
-             ]
-            |from_entries'
-        }
-
-        dispatch "$@"
-      }
-
-      _func() {
-        _jsonify()
-        {
-           echo 'def jsonify: . as $in|try fromjson catch $in;'
-        }
-
-        _escape() {
-          echo 'def escape: if type == "string" and contains("\n") then tojson else tostring end;'
-        }
-
-        dispatch "$@"
-      }
-
-      _from() {
-
-        _keys() {
-          local default=${1:-null}
-          jq -Rsc --argjson default "$default" '
-            rtrimstr("\n")
-            |split("\n")
-            |[
-              .[]|{"key": ., "value": $default}
-             ]
-            |from_entries'
-        }
-
-        _ktv() {
-          jq -Rc 'split("\t")' \
-          | _from unblocked '.next|length==0' '[]' \
-          | jq -c "$(_func jsonify)"'
-              map(
-                map(jsonify)
-                |(.[0]|=tostring)
-                |{"key":.[0], "value":.[1]}
-              )
-              |from_entries'
-        }
-
-        _tsv() {
-          jq -Rsc \
-            "$(_func jsonify)"'
-             rtrimstr("\n")
-             |split("\n")
-             |map(split("\t"))
-             |.[0] as $header
-             |.[1:] as $data
-             |$data[]
-             |. as $in
-             |[
-                foreach $header[] as $k
-                (0; .+1; {"key": $k, "value": ($in[.-1]|jsonify)})
-              ]
-             |from_entries'
-        }
-
-        _unblocked() {
-          local eob=$1
-          local eob_value=${2:-null}
-
-          jq -c --argjson eob_value "$eob_value" "def eob: $eob;"'
-            {"next": ., "output": []}
-            |until(
-              eob;
-              .output=(.output+[.next])
-              |.next=try input catch $eob_value
-            )|.output
-          '
-
-        }
-
-        dispatch "$@"
+  _from() {
+    _keys() {
+      local default=${1:-null}
+      jq -Rsc --argjson default "$default" '
+        rtrimstr("\n")
+        |split("\n")
+        |[
+          .[]|{"key": ., "value": $default}
+         ]
+        |from_entries'
     }
 
-    _jsonify() {
-       sed 's/^ *//;s/ *\$//' | jq -Rc "$(_func jsonify) jsonify"
-    }
-
-    _object() {
-        DEFAULT=$(
-          while test $# -gt 0; do
-            local key_value=$1
-            shift
-            if test "$key_value" = --; then
-              echo "$1"
-              return
-            fi
-          done | _jsonify
-        )
-
-        escape() {
-          local v="$1"
-          if test "${v/$'\n'}" != "$v"; then
-            v=$(echo -n "$v" | jq -Rs .)
-          fi
-          echo "$v"
-        }
-
-        local tab=$'\t'
-
-        (while test $# -gt 0; do
-          local key_value="$1"
-          shift
-          if test "$key_value" = --; then
-            break
-          fi
-          key=${key_value%%:*}
-          if test "$key" = "$key_value"; then
-            value=null
-          else
-            value=${key_value#*:}
-          fi
-          echo "$(escape "$key")${tab}$(escape "$value")"
-        done; echo "") | _from ktv | jq -c --argjson default "${DEFAULT:-null}" 'with_entries(if .value == null then .value=$default else . end)'
-
-    }
-
-    _o() {
-      _object "$@"
-    }
-
-    _pipe() {
-      local pipe=$1
-      pipe=$(echo "$pipe" | sed "s/^ */_/;s/| */|_/g")
-      eval "$pipe"
-    }
-
-    _select() {
-      local selector=$1
-      local map=$(jq -nr "$(_selector "$selector")|.[]" | _from keys "$default")
-      jq -c --argjson map "$map" '[to_entries[]|select(.key|in($map))]|from_entries'
-    }
-
-    _selector() {
-      local selector=$1
-      if test "${selector#[}" != "$selector"; then
-        echo "$selector" | _jsonify | jq -c .
-      else
-        (
-          IFS=,;
-          set -- $selector
-          while test $# -gt 0; do
-            echo "$1"
-            shift
-          done | _jsonify | jq -sc .
-        )
-      fi
-    }
-
-    _to() {
-        _env() {
-            jq -r 'to_entries|map(.key+"="+(
-              if .value == null then
-                ""
-              elif (.value|type|(. == "object") or (. == "array"))
-              then
-                "'\''"+(.value|tojson)+"'\''"
-              else
-                .value|tojson
-              end
-              )+";"
-            )[]'
-        }
-
-        _keys() {
-            jq -cr 'select(type == "object")|[to_entries[].key|tostring]|join("\t")'
-        }
-
-        dispatch "$@"
-    }
     dispatch "$@"
+  }
+
+  _func() {
+    _jsonify()
+    {
+       echo 'def jsonify: . as $in|try fromjson catch $in;'
+    }
+
+    _escape() {
+      echo 'def escape: if type == "string" and contains("\n") then tojson else tostring end;'
+    }
+
+    dispatch "$@"
+  }
+
+  _from() {
+
+    _keys() {
+      local default=${1:-null}
+      jq -Rsc --argjson default "$default" '
+        rtrimstr("\n")
+        |split("\n")
+        |[
+          .[]|{"key": ., "value": $default}
+         ]
+        |from_entries'
+    }
+
+    _ktv() {
+      jq -Rc 'split("\t")' \
+      | _from unblocked '.next|length==0' '[]' \
+      | jq -c "$(_func jsonify)"'
+        map(
+          map(jsonify)
+          |(.[0]|=tostring)
+          |{"key":.[0], "value":.[1]}
+        )
+        |from_entries'
+    }
+
+    _tsv() {
+      jq -Rsc \
+        "$(_func jsonify)"'
+         rtrimstr("\n")
+         |split("\n")
+         |map(split("\t"))
+         |.[0] as $header
+         |.[1:] as $data
+         |$data[]
+         |. as $in
+         |[
+            foreach $header[] as $k
+            (0; .+1; {"key": $k, "value": ($in[.-1]|jsonify)})
+          ]
+         |from_entries'
+    }
+
+    _unblocked() {
+      local eob=$1
+      local eob_value=${2:-null}
+
+      jq -c --argjson eob_value "$eob_value" "def eob: $eob;"'
+        {"next": ., "output": []}
+        |until(
+          eob;
+          .output=(.output+[.next])
+          |.next=try input catch $eob_value
+        )|.output
+      '
+
+    }
+
+    dispatch "$@"
+  }
+
+  _jsonify() {
+     sed 's/^ *//;s/ *\$//' | jq -Rc "$(_func jsonify) jsonify"
+  }
+
+  _object() {
+    DEFAULT=$(
+      while test $# -gt 0; do
+        local key_value=$1
+        shift
+        if test "$key_value" = --; then
+          echo "$1"
+          return
+        fi
+      done | _jsonify
+    )
+
+    escape() {
+      local v="$1"
+      if test "${v/$'\n'}" != "$v"; then
+        v=$(echo -n "$v" | jq -Rs .)
+      fi
+      echo "$v"
+    }
+
+    local tab=$'\t'
+
+    (while test $# -gt 0; do
+      local key_value="$1"
+      shift
+      if test "$key_value" = --; then
+        break
+      fi
+      key=${key_value%%:*}
+      if test "$key" = "$key_value"; then
+        value=null
+      else
+        value=${key_value#*:}
+      fi
+      echo "$(escape "$key")${tab}$(escape "$value")"
+    done; echo "") | _from ktv | jq -c --argjson default "${DEFAULT:-null}" 'with_entries(if .value == null then .value=$default else . end)'
+  }
+
+  _o() {
+    _object "$@"
+  }
+
+  _pipe() {
+    local pipe=$1
+    pipe=$(echo "$pipe" | sed "s/^ */_/;s/| */|_/g")
+    eval "$pipe"
+  }
+
+  _select() {
+    local selector=$1
+    local map=$(jq -nr "$(_selector "$selector")|.[]" | _from keys "$default")
+    jq -c --argjson map "$map" '[to_entries[]|select(.key|in($map))]|from_entries'
+  }
+
+  _selector() {
+    local selector=$1
+    if test "${selector#[}" != "$selector"; then
+      echo "$selector" | _jsonify | jq -c .
+    else
+      (
+        IFS=,;
+        set -- $selector
+        while test $# -gt 0; do
+          echo "$1"
+          shift
+        done | _jsonify | jq -sc .
+      )
+    fi
+  }
+
+  _to() {
+    _env() {
+      jq -r 'to_entries|map(.key+"="+(
+        if .value == null then
+          ""
+        elif (.value|type|(. == "object") or (. == "array"))
+        then
+          "'\''"+(.value|tojson)+"'\''"
+        else
+          .value|tojson
+        end
+        )+";"
+      )[]'
+    }
+
+    _keys() {
+        jq -cr 'select(type == "object")|[to_entries[].key|tostring]|join("\t")'
+    }
+
+    dispatch "$@"
+  }
+
+  dispatch "$@"
 }
 
 _post() {
-    _activity() {
-      eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
-      test -n "$uid" && test -n "$first" && test -n "$after" || die "usage: activity uid:{uid} first:{first} after:{after}"
+  _activity() {
+    eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
+    test -n "$uid" && test -n "$first" && test -n "$after" || die "usage: activity uid:{uid} first:{first} after:{after}"
 
-      local data="$(
-        _ju o "after:$after" "first:$first" "uid:$uid" \
-        | _explode exec --stdin body query_activity
-      )"
+    local data="$(
+      _ju o "after:$after" "first:$first" "uid:$uid" \
+      | _explode exec --stdin body query_activity
+    )"
 
-      _curl \
-        data:"$data" \
-        headers:"$(_explode exec headers query_activity)" \
-        method:POST \
-        path:"$(_explode exec path query_activity)"
-    }
+    _curl \
+      data:"$data" \
+      headers:"$(_explode exec headers query_activity)" \
+      method:POST \
+      path:"$(_explode exec path query_activity)"
+  }
 
-    _mute() {
-      local uid=$1
+  _mute() {
+    local uid=$1
 
-      test -n "$uid" || die "usage: post mute {uid}"
+    test -n "$uid" || die "usage: post mute {uid}"
 
-      _curl \
-        method:POST \
-        path:"$(_explode exec path mutation_user_mute)" \
-        headers:"$(_explode exec headers mutation_user_mute)" \
-        data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_mute)" \
-        | jq -c --arg uid "$uid" '
-              {
-                  "uid": $uid,
-                  "viewerHasMuted": .data.userMute.user.viewerHasMuted
-              }'
-    }
+    _curl \
+      method:POST \
+      path:"$(_explode exec path mutation_user_mute)" \
+      headers:"$(_explode exec headers mutation_user_mute)" \
+      data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_mute)" \
+      | jq -c --arg uid "$uid" '
+            {
+                "uid": $uid,
+                "viewerHasMuted": .data.userMute.user.viewerHasMuted
+            }'
+  }
 
-    _markAsRead() {
-      local sncid="$1"
+  _markAsRead() {
+    local sncid="$1"
 
-      test -n "$sncid" || die "usage: post markAsRead {sncid}"
-      _curl \
-        method:POST \
-        path:"$(_explode exec path mutation_notification_markAsRead)" \
-        headers:"$(_explode exec headers mutation_notification_markAsRead)" \
-        data:"$(_ju o sncid:$sncid | _explode exec --stdin body mutation_notification_markAsRead)" \
-        | jq -c --argjson sncid "$sncid" '
-        {
-            "sncid": $sncid,
-            "isRead": (.data.markSentNotifCollectionAsRead.sentNotifCollection.isRead//false)
-        }'
+    test -n "$sncid" || die "usage: post markAsRead {sncid}"
+    _curl \
+      method:POST \
+      path:"$(_explode exec path mutation_notification_markAsRead)" \
+      headers:"$(_explode exec headers mutation_notification_markAsRead)" \
+      data:"$(_ju o sncid:$sncid | _explode exec --stdin body mutation_notification_markAsRead)" \
+      | jq -c --argjson sncid "$sncid" '
+      {
+          "sncid": $sncid,
+          "isRead": (.data.markSentNotifCollectionAsRead.sentNotifCollection.isRead//false)
+      }'
 
-    }
+  }
 
-    _report() {
-        local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
-        _curl \
-          method:POST \
-          path:"$(_explode exec path mutation_report_add)" \
-          headers:"$(_explode exec headers mutation_report_add)" \
-          data:"$data" \
-          | jq -c --arg uid "$uid" '{
-               "uid": $uid,
-               "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
-          }'
-    }
+  _report() {
+    local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
+    _curl \
+      method:POST \
+      path:"$(_explode exec path mutation_report_add)" \
+      headers:"$(_explode exec headers mutation_report_add)" \
+      data:"$data" \
+      | jq -c --arg uid "$uid" '{
+           "uid": $uid,
+           "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
+      }'
+  }
 
-    dispatch "$@"
+  dispatch "$@"
 }
 
 _process() {
-    local selector=$1
+  local selector=$1
 
-    test -n "$selector" || die "process {selector}"
-    _query "$selector" | _report "$selector"
+  test -n "$selector" || die "process {selector}"
+  _query "$selector" | _report "$selector"
 }
 
 _query() {
 
-    _activity-summary() {
-      local uid=$1
-      test -n "$uid" || die "usage: activity-summary {uid]"
+  _activity-summary() {
+    local uid=$1
+    test -n "$uid" || die "usage: activity-summary {uid]"
 
-      end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r .data.user.activityConnection.pageInfo.endCursor)
-      test -n "$end_cursor" || die "query: activity-summary: end_cursor is empty"
-      first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 1) | _filter activity-summary)
-      test -n "$first" || die "query: activity-summary: first is empty"
-      last=$(_post activity uid:$uid first:1 after:0  | _filter activity-summary)
-      test -n "$last" || die "query: activity-summary: last is empty"
+    end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r .data.user.activityConnection.pageInfo.endCursor)
+    test -n "$end_cursor" || die "query: activity-summary: end_cursor is empty"
+    first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 1) | _filter activity-summary)
+    test -n "$first" || die "query: activity-summary: first is empty"
+    last=$(_post activity uid:$uid first:1 after:0  | _filter activity-summary)
+    test -n "$last" || die "query: activity-summary: last is empty"
 
-      jq -nc \
-        --argjson count "$end_cursor" \
-        --argjson first "$first" \
-        --argjson last "$last" \
-        --argjson uid "$uid" '
-      (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) as $active
-      |($count*36000/$active|round|./10) as $rate
-      |{
-          uid: $uid,
-          profileUrl: $first.profileUrl,
+    jq -nc \
+      --argjson count "$end_cursor" \
+      --argjson first "$first" \
+      --argjson last "$last" \
+      --argjson uid "$uid" '
+    (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) as $active
+    |($count*36000/$active|round|./10) as $rate
+    |{
+        uid: $uid,
+        profileUrl: $first.profileUrl,
 
-          upvotes: {
-            count: $count,
-            active_seconds: $active,
-            active_hours: ($active/360|round|./10),
-            rate_per_hour: $rate,
-            first: ($first|del(.uid)|del(.profileUrl)),
-            last: ($last|del(.uid)|del(.profileUrl))
-          }
-      }
-      '
+        upvotes: {
+          count: $count,
+          active_seconds: $active,
+          active_hours: ($active/360|round|./10),
+          rate_per_hour: $rate,
+          first: ($first|del(.uid)|del(.profileUrl)),
+          last: ($last|del(.uid)|del(.profileUrl))
+        }
     }
+    '
+  }
 
-    _profile() {
-        local profile=${1#/profile/}
-        _curl \
-          args:'["-L"]' \
-          method:GET \
-          "headers:$(_explode exec headers profile)" \
-          "path:$(ju o profileUrl:"$profile" | _explode exec --stdin path profile)" \
-          | _filter html \
-          | jq '
-            select(.data.user)
-            |(
-              if .data.user.descriptionQtextDocument.legacyJson then
-                .data.user.descriptionQtextDocument.legacyJson|=fromjson
-              else
-                .
-              end
-            )'
-    }
+  _profile() {
+    local profile=${1#/profile/}
+    _curl \
+      args:'["-L"]' \
+      method:GET \
+      "headers:$(_explode exec headers profile)" \
+      "path:$(ju o profileUrl:"$profile" | _explode exec --stdin path profile)" \
+      | _filter html \
+      | jq '
+        select(.data.user)
+        |(
+          if .data.user.descriptionQtextDocument.legacyJson then
+            .data.user.descriptionQtextDocument.legacyJson|=fromjson
+          else
+            .
+          end
+        )'
+  }
 
-    _simple-notifications() {
-        _upvotes | _filter simple-notifications
-    }
+  _simple-notifications() {
+    _upvotes | _filter simple-notifications
+  }
 
-    _simple-profile()  {
-        local profile=${1#/profile/}
-        _profile "$profile" | _filter full-to-simple-profile
-    }
+  _simple-profile()  {
+    local profile=${1#/profile/}
+    _profile "$profile" | _filter full-to-simple-profile
+  }
 
-    _self() {
-        _profile | _filter full-to-simple-profile
-    }
+  _self() {
+    _profile | _filter full-to-simple-profile
+  }
 
-    _simple-profiles() {
-        _simple-notifications | _filter simple-profiles
-    }
+  _simple-profiles() {
+    _simple-notifications | _filter simple-profiles
+  }
 
-    _sweet-hot-girls() {
-        _simple-profiles | _filter sweet-hot-girls
-    }
+  _sweet-hot-girls() {
+    _simple-profiles | _filter sweet-hot-girls
+  }
 
-    _uid() {
-        local profile=${1#/profile/}
-        _simple-profile "$profile" | jq -r .uid
-    }
+  _uid() {
+    local profile=${1#/profile/}
+    _simple-profile "$profile" | jq -r .uid
+  }
 
-    _upvotes() {
-        _curl \
-          method:GET \
-          "path:$(_explode exec path upvotes)" \
-          "headers:$(_explode exec headers upvotes)" \
-        | _filter html
-    }
+  _upvotes() {
+    _curl \
+      method:GET \
+      "path:$(_explode exec path upvotes)" \
+      "headers:$(_explode exec headers upvotes)" \
+    | _filter html
+  }
 
-    dispatch "$@"
+  dispatch "$@"
 }
 
 _require() {
-    _dotfiles() {
-      if ! test -d "${QUORA_DOTFILES}"; then
-        mkdir -p "${QUORA_DOTFILES}"
-        chmod 2700 "${QUORA_DOTFILES}"
-      fi
-      if ! test -f "${QUORA_DOTFILES}/config"; then
-        echo '{
-          "enable-submit": false
-        }' > "${QUORA_DOTFILES}/config"
-      fi
-    }
+  _dotfiles() {
+    if ! test -d "${QUORA_DOTFILES}"; then
+      mkdir -p "${QUORA_DOTFILES}"
+      chmod 2700 "${QUORA_DOTFILES}"
+    fi
+    if ! test -f "${QUORA_DOTFILES}/config"; then
+      echo '{
+        "enable-submit": false
+      }' > "${QUORA_DOTFILES}/config"
+    fi
+  }
 
-    dispatch "$@"
+  dispatch "$@"
 }
 
 _report() {
-    _sweet-hot-girls() {
-        while read -r profile; do
-            (
-                eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
-                if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
-                  continue
-                fi
-                echo "$profile"
-                if test "$isRead" = "false"; then
-                  _post markAsRead "$sncid"
-                fi
-                if test "$isBlockedByViewer" = "false"; then
-                  _post report "uid:$uid" "message:Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
-                  _file-profile-report "$profileUrl"
-                fi
-                if test "$viewerHasMuted" = "false"; then
-                  _post mute "$uid"
-                fi
-            ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
-            sleep 5;
-        done
-   }
+  _sweet-hot-girls() {
+    while read -r profile; do
+      (
+        eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
+        if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
+          continue
+        fi
+        echo "$profile"
+        if test "$isRead" = "false"; then
+          _post markAsRead "$sncid"
+        fi
+        if test "$isBlockedByViewer" = "false"; then
+          _post report "uid:$uid" "message:Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
+          _file-profile-report "$profileUrl"
+        fi
+        if test "$viewerHasMuted" = "false"; then
+          _post mute "$uid"
+        fi
+      ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
+      sleep 5;
+    done
+ }
 
-   jq -c 'select(.isSpam)' | dispatch "$@"
+ jq -c 'select(.isSpam)' | dispatch "$@"
 }
 
 _shell() {
-    export PS1="\h:\W \u (qs)\$ "
-    ${SHELL:-bash}
+  export PS1="\h:\W \u (qs)\$ "
+  ${SHELL:-bash}
 }
 
 _explodeable() {
@@ -970,15 +970,15 @@ _explodeable() {
     _mutation_notification_markAsRead() {
       _body() {
         echo '{
-            "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
-            "extensions":{
-              "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
-            },
-            "variables":{
-              "sncid":.sncid,
-              "source":"notif_page",
-              "shouldLogClick":true
-            }
+          "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
+          "extensions":{
+            "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
+          },
+          "variables":{
+            "sncid":.sncid,
+            "source":"notif_page",
+            "shouldLogClick":true
+          }
         }'
       }
 
@@ -1072,13 +1072,13 @@ _explodeable() {
     _mutation_user_mute() {
       _body() {
         echo '{
-            "queryName": "UserMute_userMute_Mutation",
-            "extensions": {
-              "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
-            },
-            "variables": {
-              "uid": .uid
-            }
+          "queryName": "UserMute_userMute_Mutation",
+          "extensions": {
+            "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
+          },
+          "variables": {
+            "uid": .uid
+          }
         }'
       }
 
@@ -1109,46 +1109,45 @@ _explodeable() {
     #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
     _mutation_report_add() {
       _body() {
-          echo '{
-            "queryName": "ReportModalInner_reportAdd_Mutation",
-            "extensions": {
-              "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
-            },
-            "variables": {
-              "reason": "spam",
-              "targetType": "user",
-              "reportableId": .uid,
-              "comment": {
-                "sections": [
-                  {
-                    "type": "plain",
-                    "indent": 0,
-                    "quoted": false,
-                    "is_rtl": false,
-                    "spans": [
-                      {
-                        "modifiers": {},
-                        "text": .message
-                      }
-                    ]
-                  }
-                ],
-                "caret": {
-                  "start": {
-                    "spanIdx": 0,
-                    "sectionIdx": 0,
-                    "offset": 59
-                  },
-                  "end": {
-                    "spanIdx": 0,
-                    "sectionIdx": 0,
-                    "offset": 59
-                  }
+        echo '{
+          "queryName": "ReportModalInner_reportAdd_Mutation",
+          "extensions": {
+            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+          },
+          "variables": {
+            "reason": "spam",
+            "targetType": "user",
+            "reportableId": .uid,
+            "comment": {
+              "sections": [
+                {
+                  "type": "plain",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {},
+                      "text": .message
+                    }
+                  ]
+                }
+              ],
+              "caret": {
+                "start": {
+                  "spanIdx": 0,
+                  "sectionIdx": 0,
+                  "offset": 59
+                },
+                "end": {
+                  "spanIdx": 0,
+                  "sectionIdx": 0,
+                  "offset": 59
                 }
               }
             }
-          }|.variables.comment|=tojson'
-
+          }
+        }|.variables.comment|=tojson'
       }
 
       _headers() {
@@ -1175,20 +1174,20 @@ _explodeable() {
 
     }
 
-
-
     _profile() {
       _path() {
         echo '"/profile/"+(.profileUrl|@uri)'
       }
 
       _headers() {
-        echo 'accept
-              *cache_control_max_age_0
-              *sec_ch_ua
-              *sec_fetch_document_navigate_same_origin
-              *upgrade_insecure_requests
-              *user_agent'
+        echo '
+          accept
+          *cache_control_max_age_0
+          *sec_ch_ua
+          *sec_fetch_document_navigate_same_origin
+          *upgrade_insecure_requests
+          *user_agent
+        '
       }
 
       _requires() {
@@ -1204,99 +1203,99 @@ _explodeable() {
           .activity as $activity
           |.others as $others
           |{
-              "sections": [
-                {
-                  "type": "plain",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {},
-                      "text": "This "
+            "sections": [
+              {
+                "type": "plain",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {},
+                    "text": "This "
+                  },
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.profileUrl)"
+                      }
                     },
-                    {
-                      "modifiers": {
-                        "link": {
-                          "type": "url",
-                          "url": "https://www.quora.com\($activity.profileUrl)"
-                        }
-                      },
-                      "text": "profile"
+                    "text": "profile"
+                  },
+                  {
+                    "modifiers": {},
+                    "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
+                  }
+                ]
+              },
+              {
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.upvotes.first.url)"
+                      }
                     },
-                    {
-                      "modifiers": {},
-                      "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
-                    }
-                  ]
-                },
-                {
-                  "type": "unordered-list",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {
-                        "link": {
-                          "type": "url",
-                          "url": "https://www.quora.com\($activity.upvotes.first.url)"
-                        }
-                      },
-                      "text": "\($activity.upvotes.first.timestamp) - #1"
-                    }
-                  ]
-                },
-                {
-                  "type": "unordered-list",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {
-                        "link": {
-                          "type": "url",
-                          "url": "https://www.quora.com\($activity.upvotes.last.url)"
-                        }
-                      },
-                      "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
-                    }
-                  ]
-                },
-                {
-                  "type": "plain",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {},
-                      "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
-                    }
-                  ]
-                },
-                ($others|map({
-                  "type": "unordered-list",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {
-                        "link": {
-                          "type": "url",
-                          "url": ("https://www.quora.com"+.)
-                        }
-                      },
-                      "text": (.|sub("/profile/";"")),
+                    "text": "\($activity.upvotes.first.timestamp) - #1"
+                  }
+                ]
+              },
+              {
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.upvotes.last.url)"
+                      }
                     },
-                    {
-                      "modifiers": {},
-                      "text": "\n"
-                    }
-                  ]
-                  }))
+                    "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
+                  }
+                ]
+              },
+              {
+                "type": "plain",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {},
+                    "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
+                  }
+                ]
+              },
+              ($others|map({
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": ("https://www.quora.com"+.)
+                      }
+                    },
+                    "text": (.|sub("/profile/";"")),
+                  },
+                  {
+                    "modifiers": {},
+                    "text": "\n"
+                  }
+                ]
+                }))
               ]|flatten,
             "caret": {
               "start": {
@@ -1317,7 +1316,6 @@ _explodeable() {
       dispatch "$@"
 
     }
-
 
     # "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
     _query_activity() {
@@ -1362,12 +1360,14 @@ _explodeable() {
 
     _upvotes() {
       _headers() {
-        echo 'accept
-              *cache_control_max_age_0
-              *sec_ch_ua
-              *sec_fetch_document_navigate_same_origin
-              *upgrade_insecure_requests
-              *user_agent'
+        echo '
+          accept
+          *cache_control_max_age_0
+          *sec_ch_ua
+          *sec_fetch_document_navigate_same_origin
+          *upgrade_insecure_requests
+          *user_agent
+        '
       }
 
       _path() {
@@ -1449,17 +1449,17 @@ _explode() {
 }
 
 __to() {
-    _curl-args() {
-      jq -r '
-        if type=="object" then
-          to_entries[]|"-H\t"+.key+": "+.value
-        elif type=="array" then
-          .|join("\t")
-        else
-          .
-        end' | tr \\012 \\011 | sed "s/.\$//"
-    }
-    dispatch "$@"
+  _curl-args() {
+    jq -r '
+      if type=="object" then
+        to_entries[]|"-H\t"+.key+": "+.value
+      elif type=="array" then
+        .|join("\t")
+      else
+        .
+      end' | tr \\012 \\011 | sed "s/.\$//"
+  }
+  dispatch "$@"
 }
 
 _to() {
@@ -1480,6 +1480,6 @@ _version() {
 _credentials >/dev/null
 
 if test $# -eq 0; then
-    set -- usage
+  set -- usage
 fi
 dispatch "$@"
