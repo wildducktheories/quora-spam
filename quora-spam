@@ -166,7 +166,12 @@ _filter() {
       # strip leading, trailing whitespace,
       # delete empty lines
       # join lines not separateed by trailing ;
-      tr \\011 ' ' | sed 's/^ *//;s/ *$//g;s/ *; *$/;/;/^$/d;' | awk '!/;$/{printf $0}/;$/'
+
+      if test -z "$JQC"; then
+        tr \\011 ' ' | sed 's/^ *//;s/ *$//g;s/ *; *$/;/;/^$/d;' | awk '!/;$/{printf $0}/;$/'
+      else
+        ${JQC}
+      fi
     }
 
     _simple-notifications() {
