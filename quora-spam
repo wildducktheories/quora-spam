@@ -624,6 +624,22 @@ _ju() {
 }
 
 _post() {
+    _activity() {
+      eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
+      test -n "$uid" && test -n "$first" && test -n "$after" || die "usage: activity uid:{uid} first:{first} after:{after}"
+
+      local data="$(
+        _ju o "after:$after" "first:$first" "uid:$uid" \
+        | _explode exec --stdin body query_activity
+      )"
+
+      _curl \
+        data:"$data" \
+        headers:"$(_explode exec headers query_activity)" \
+        method:POST \
+        path:"$(_explode exec path query_activity)"
+    }
+
     _mute() {
       local uid=$1
 
@@ -669,30 +685,6 @@ _post() {
                "uid": $uid,
                "isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer
           }'
-    }
-
-
-    _activity() {
-      eval "$(jq -s '.[0]*.[1]' <(_ju o first:1 after:998) <(_ju o "$@") | _ju pipe 'select uid,first,after|to env')"
-      test -n "$uid" && test -n "$first" && test -n "$after" || die "usage: activity uid:{uid} first:{first} after:{after}"
-      local path="/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
-      local data=$(
-          _template body "$path" \
-          | jq \
-            -c \
-            --argjson uid "$uid" \
-            --argjson first "$first" \
-            --arg after "$after" '
-          .variables.uid=$uid
-          |.variables.first=$first
-          |.variables.after=$after
-      ')
-
-      _curl \
-        method:POST \
-        path:"$path" \
-        headers:"$(_template headers "$path")" \
-        data:"$data"
     }
 
     dispatch "$@"
@@ -1578,6 +1570,48 @@ _explodeable() {
 
       _requirements() {
         echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+
+    # "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
+    _query_activity() {
+      _body() {
+        echo '
+          {
+            "queryName": "UserProfileActivity_feedStories_Query",
+            "extensions": {
+              "hash": "b3ec746645150c155aa601c727d305812f83ee56365bed740487ff58358c3814"
+            },
+            "variables": {
+              "uid": .uid,
+              "first": .first,
+              "after": (.after|tostring)
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan50-8888";"react_gvkeyzfhoyeeovpl";"bvTC";"6f83bc46e0b270f21d00421c8be3cf5d978036f3")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"'
+      }
+
+      _requirements() {
+        echo '{"headers": ["lib"]}'
       }
 
       dispatch "$@"
