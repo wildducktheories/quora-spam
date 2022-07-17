@@ -230,6 +230,31 @@ _filter() {
     | ju select 'uid,url,text,timestamp,profileUrl'
   }
 
+  _headers-as-map() {
+    jq '
+      reduce .[] as $o (
+        {};
+        .[$o.key]|=(
+          if
+            . == null
+          then
+            [$o.value]
+          else
+            .+[$o.value]
+          end
+        )
+      )|with_entries(
+        if
+          (.value|length) == 1
+        then
+          .value|=.[0]
+        else
+          .
+        end
+      )
+    '
+  }
+
   _html() {
     grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
     | tail -1 \
@@ -309,6 +334,28 @@ _filter() {
   }
 
   dispatch "$@"
+}
+
+__from() {
+  _curl-response-headers() {
+    (
+      echo -e "key\tvalue";
+      tr -d \\015 \
+      | grep "^<" \
+      | sed -n "2,\$p" \
+      | sed "s/^< //;s/^\([^:]*\): \(.*\)/\1\t\2/" \
+      | sed "/^HTTP/d" \
+      | sed "/^\$/d" \
+    ) \
+    | _ju from tsv \
+    | jq -sc .
+  }
+
+  dispatch "$@"
+}
+
+_from() {
+  __from "$@"
 }
 
 _har() {
