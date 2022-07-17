@@ -505,6 +505,18 @@ _loop() {
 
 
 _ju() {
+
+  _a() {
+    _array "$@"
+  }
+
+  _array() {
+    while test $# -gt 0; do
+      echo "$1"
+      shift
+    done | _jsonify | jq -sc .
+  }
+
   _from() {
     _keys() {
       local default=${1:-null}
