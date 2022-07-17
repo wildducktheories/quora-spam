@@ -17,6 +17,31 @@ dispatch () {
   "$@"
 }
 
+_cache() {
+
+  _key() {
+    echo "$*" | md5sum | cut -f1 -d' '
+  }
+
+  _exec() {
+    local key=$(_key "$@")
+    if test -f "$cache_dir/$key"; then
+      cat "$cache_dir/$key"
+    else
+      out=$("$@")
+      local rc=$?
+      if test $rc -eq 0; then
+        echo "$out" > "$cache_dir/$key"
+      fi
+      echo "$out"
+    fi
+  }
+
+  cache_dir=$QUORA_DOTFILES/cache
+  mkdir -p "$cache_dir"
+
+  dispatch "$@"
+}
 _credentials() {
   if test -z "$QUORA_CREDENTIALS"; then
     export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
