@@ -831,9 +831,9 @@ _query() {
     local uid=$1
     test -n "$uid" || die "usage: activity-summary {uid]"
 
-    end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r .data.user.activityConnection.pageInfo.endCursor)
+    end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor')
     test -n "$end_cursor" || die "query: activity-summary: end_cursor is empty"
-    first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 1) | _filter activity-summary)
+    first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 2) | _filter activity-summary)
     test -n "$first" || die "query: activity-summary: first is empty"
     last=$(_post activity uid:$uid first:1 after:0  | _filter activity-summary)
     test -n "$last" || die "query: activity-summary: last is empty"
@@ -841,7 +841,7 @@ _query() {
     jq -nc \
       --argjson count "$end_cursor" \
       --argjson first "$first" \
-      --argjson last "$last" \
+      --argjson last "$last//{}" \
       --argjson uid "$uid" '
     (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) as $active
     |($count*36000/$active|round|./10) as $rate
