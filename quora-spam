@@ -333,7 +333,7 @@ _filter() {
           |select(.modifiers.link!=null)
           |{"text":.text, "url":.modifiers.link.url}
        ],
-      "space-links": [
+      "space_links": [
           .data.user.combinedProfileFeedConnection.edges[]
           |.node.post.contentQtextDocument.legacyJson
           |(
