@@ -1082,7 +1082,7 @@ _explodeable() {
 
     _origin() {
       _headers() {
-        echo '{"origin": "https://www.quora.com"}'
+        jq -nc --arg host "${HOST:-www.quora.com}" '{"origin": "https://\($host)"}'
       }
       dispatch "$@"
     }
