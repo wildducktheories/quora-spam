@@ -914,6 +914,11 @@ _query() {
     '
   }
 
+  _nodeId() {
+    local url=$1
+    curl -s "$url" | _filter html | jq -r .data.tribeItem.post.id
+  }
+
   _profile() {
     local profile=${1#/profile/}
     _curl \
