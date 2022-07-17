@@ -305,8 +305,24 @@ _filter() {
       "isSpam": false,
       "links": [
           .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
-          |select(.modifiers.link!=null)|{"text":.text, "url":.modifiers.link.url}
-       ]
+          |select(.modifiers.link!=null)
+          |{"text":.text, "url":.modifiers.link.url}
+       ],
+      "space-links": [
+          .data.user.combinedProfileFeedConnection.edges[]
+          |.node.post.contentQtextDocument.legacyJson
+          |(
+            if . then (
+              fromjson
+              |.sections[]
+              |.spans[]
+              |.modifiers.embed.url
+              |select(startswith("https://adultdating.quora.com"))
+            ) else
+              empty
+            end
+          )
+      ]
     }|.isSpammyUrl=(
         .links
         |any(
