@@ -244,13 +244,13 @@ _filter() {
 
   _activity-summary() {
     jq '
-      .data.user.activityConnection.edges[].node as $node
+      [.data.user.activityConnection.edges[].node as $node
       |$node.feedReason
       |select(.__isFeedReason=="UserUpvotedAnswerReason")
       |.uid=.userNames[0].uid
       |.timestamp|=(./1000000|round|todateiso8601)
       |.profileUrl=.userNames[0].profileUrl
-      |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)
+      |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)][-1]
     ' \
     | ju select 'uid,url,text,timestamp,profileUrl'
   }
@@ -870,22 +870,32 @@ _query() {
 
   _activity-summary() {
     local uid=$1
-    test -n "$uid" || die "usage: activity-summary {uid]"
+    test -n "$uid" || die "usage: activity-summary {uid}"
 
-    end_cursor=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor')
-    test -n "$end_cursor" || die "query: activity-summary: end_cursor is empty"
-    first=$(_post activity uid:$uid first:1 after:$(expr $end_cursor - 2) | _filter activity-summary)
-    test -n "$first" || die "query: activity-summary: first is empty"
-    last=$(_post activity uid:$uid first:1 after:0  | _filter activity-summary)
-    test -n "$last" || die "query: activity-summary: last is empty"
+    while true; do
+      echo "activity-summary: $uid" 1>&2
+      count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0')
+      count=${count:-0}
+      if test "${count:-0}" -gt 2; then
+        first=$(_post activity uid:$uid first:10 after:$(expr $count - 10) | _filter activity-summary)
+        last=$(_post activity uid:$uid first:1 after:0 | _filter activity-summary)
+      else
+        first=null
+        last=null
+        break
+      fi
+      if test -n "$first" -a -n "$last"; then
+        break
+      fi
+    done
 
     jq -nc \
-      --argjson count "$end_cursor" \
-      --argjson first "$first" \
-      --argjson last "$last//{}" \
+      --argjson count "${count:0}" \
+      --argjson first "${first}" \
+      --argjson last "${last}" \
       --argjson uid "$uid" '
-    (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) as $active
-    |($count*36000/$active|round|./10) as $rate
+    (if $count > 0 then (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) else 0 end) as $active
+    |(if $count > 0 then ($count*36000/$active|round|./10) else 0 end) as $rate
     |{
         uid: $uid,
         profileUrl: $first.profileUrl,
@@ -897,8 +907,10 @@ _query() {
           rate_per_hour: $rate,
           first: ($first|del(.uid)|del(.profileUrl)),
           last: ($last|del(.uid)|del(.profileUrl))
-        }
+        }|(if (.first) then . else del(.first) end)
+         |(if (.last) then . else del(.last) end)
     }
+    |if (.profileUrl) then . else del(.profileUrl) end
     '
   }
 
