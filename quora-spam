@@ -64,42 +64,118 @@ _curl() {
   local credentials=$(_credentials)
   test -n "$credentials" || die "not logged in"
 
+  headers=${headers:-{\}}
+
   eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
 
   case "$method" in
-    GET)
-      credentials=$(jq -n "$credentials"'|{"cookie": .cookie}')
+    (GET)
+      credentials="$(jq -nc "$credentials"'|with_entries(select(.key=="cookie"))')"
     ;;
-    *)
+    (POST|"")
       :
     ;;
+    (*)
+      set -- "$@" -X$method
+    ;;
   esac
+
+  local sensitive_headers=$(jq -nc "${headers}*${credentials}")
 
   if $debug && test -n "$data"; then
     : #echo "$data" | jq -c '["DEBUG", .]' 1>&2
   fi
 
-  local output=
-  output=$(
+  (
     IFS=$'\t'
     set -- \
       --compressed \
-     ${CURL_DEBUG:+-v} \
       -s \
       $(
         (
           echo "$args";
-          echo "$headers";
-          echo "$credentials";
+          echo "$sensitive_headers";
         ) | __to curl-args
       )
     if test -n "$data"; then
       set -- "$@" --data-raw "$data"
     fi
     host=${host:-www.quora.com}
-    curl "$@" "https://$host$path"
-  )||die "curl: failed rc=$?"
-  echo "$output" 
+
+    if (true >&3) 2>/dev/null; then
+      local output=$(mktemp)
+      local diagnostics=$(mktemp)
+      local verbose=$(mktemp)
+      trap "rm -f \"$output\" \"$diagnostics\" \"$verbose\"" exit
+
+      set -- "$@" -v -o "$output" -w '%{stdout}%{json}' "https://$host$path"
+
+      curl "$@" >"${diagnostics}" 2>"${verbose}"
+
+      local rc=$?
+
+      cat "$output"
+      if test -n "$CURL_DEBUG"; then
+        cat "$verbose" 1>&2
+      fi
+
+      if ! response_body="$(jq -c . "$output" 2>/dev/null)"; then
+        response_body="$(jq -sR . $output)"
+      fi
+
+      response_headers="$(
+        cat "$verbose" \
+        | _from curl-response-headers \
+        | _filter headers-as-map \
+        | jq -c .
+      )"
+
+      test $rc -eq 0 || die "curl: non-zero exit code: $rc"
+
+      ju o \
+        "agent:$(
+          ju o \
+            "args:$args" \
+            "diagnostics:$(jq -c . <$diagnostics)" \
+            "verbose:$(jq -sR . <$verbose)" \
+            | jq -c 'with_entries(if .value=="" then empty else . end)'
+        )" \
+        "request:$(
+          ju o \
+            "host:$host" \
+            "method:$method" \
+            "path:$path" \
+            "headers:$headers" \
+            "body:$data" \
+            "elided-headers:$(jq -nc "${credentials}|keys")" \
+            | jq -c 'with_entries(if .value=="" then empty else . end)'
+
+        )" \
+        "response:$(
+          ju o \
+            "body:$response_body" \
+            "headers:$response_headers"
+        )" \
+        | jq . 1>&3
+
+      eval "$(jq -c . < "${diagnostics}" | _ju pipe 'select http_code|to env')"
+      case "$http_code" in
+        (2*|3*)
+          return 0
+        ;;
+        (4*|5*)
+          jq -c . < "${diagnostics}" >&2
+          DIE_RC=4 die "curl: request failed with http_code: $http_code"
+        ;;
+        (5*)
+          jq -c . < "${diagnostics}" >&2
+          DIE_RC=5 die "curl: server failed with http_code: $http_code"
+        ;;
+      esac
+    else
+      curl "$@" "https://$host$path" || die "curl: failed: $?"
+    fi
+  )||exit $?
 }
 
 _file-profile-report() {
