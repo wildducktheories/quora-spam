@@ -809,6 +809,22 @@ _post() {
       path:"$(_explode exec path query_activity)"
   }
 
+  _shares() {
+    eval "$(jq -s '.[0]*.[1]' <(_ju o first:10 after:0) <(_ju o "$@") | _ju pipe 'select nodeId,first,after|to env')"
+    test -n "$nodeId" && test -n "$first" && test -n "$after" || die "usage: shares nodeId:{nodeId} first:{first} after:{after}"
+
+    local data="$(
+      _ju o "after:$after" "first:$first" "nodeId:$nodeId" \
+      | _explode exec --stdin body query_shares
+    )"
+
+    _curl \
+      data:"$data" \
+      headers:"$(_explode exec headers query_shares)" \
+      method:POST \
+      path:"$(_explode exec path query_shares)"
+  }
+
   _mute() {
     local uid=$1
 
@@ -1542,6 +1558,51 @@ _explodeable() {
 
       _path() {
         echo '"/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"'
+      }
+
+      _requires() {
+        echo '{"headers": ["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _query_shares() {
+
+      _host() {
+        jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
+      }
+
+      _body() {
+        echo '
+          {
+            "queryName": "SharePostsPagedListQuery",
+            "extensions": {
+              "hash": "ad3fdfef026be57dc1f334e6c00638d4ed7b7037149990a3ffb33b0c37d4cd3c"
+            },
+            "variables": {
+              "nodeId": .nodeId,
+              "first": .first,
+              "after": (.after|tostring)
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_klvmidphlajzcwqe";"FdjV";"f4c2c2ff6b34f3f0dcd5d8a71b45003d84e1633d")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_para_POST?q=SharePostsPagedListQuery"'
       }
 
       _requires() {
