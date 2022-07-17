@@ -960,7 +960,7 @@ _query() {
 
   _simple-profile()  {
     local profile=${1#/profile/}
-    _profile "$profile" | _filter full-to-simple-profile
+    _cache exec _profile "$profile" | _filter full-to-simple-profile
   }
 
   _self() {
