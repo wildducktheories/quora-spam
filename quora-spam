@@ -914,7 +914,11 @@ _process() {
   local selector=$1
 
   test -n "$selector" || die "process {selector}"
-  _query "$selector" | _report "$selector"
+  if test "$(type -t "_$selector")" = "function"; then
+    dispatch "$@"
+  else
+    _query "$selector" | _report "$selector"
+  fi
 }
 
 _query() {
