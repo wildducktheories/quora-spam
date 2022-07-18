@@ -25,7 +25,7 @@ _cache() {
 
   _exec() {
     local key=$(_key "$@")
-    if test -f "$cache_dir/$key"; then
+    if test -f "$cache_dir/$key" && test "$CACHE_BUST" != "true"; then
       cat "$cache_dir/$key"
     else
       out=$("$@")
@@ -35,6 +35,10 @@ _cache() {
       fi
       echo "$out"
     fi
+  }
+
+  _bust() {
+    CACHE_BUST=true _exec "$@"
   }
 
   cache_dir=$QUORA_DOTFILES/cache
