@@ -212,6 +212,10 @@ However, if you cannot verify the `quora-spam` script is not malicious then you 
 In order to mitigate the risk of leaving Quora credentials sitting on your harddrive, the credentials, including credentials and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
 # RELEASE NOTES
+- 2002-07-18 - v1.6
+	+ add support for 'adult-dating' alternative to 'sweet-hot-girls' to deal with a new variant of the spam in which profiles don't have spammy links but link instead to a post that contains spammy links
+	+ added caching support to avoid repeated executions of same curl request
+	+ add explode-adult-dating to generate a upvote activity summary for all sharers of a spammy post. warning: this command is expensive in terms of curl requests, network, CPU and disk
 - 2002-07-16 - v1.5
 	+ replaced 'template' with 'explode' and 'explodeable'
 	+ reworked all curl calls to use 'explode'
