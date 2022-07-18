@@ -225,10 +225,10 @@ _file-profile-report() {
               --arg 'profile' "$profile" \
             'map(.profileUrl|select(.|contains($profile)|not))')"
 
-    data="$(_ju o "activity:$activity" "title:$title" "others:$others" | _explode exec --stdin body mutation_post_add)"
-    headers=$(_explode exec headers mutation_post_add)
-    host=$(_explode exec host mutation_post_add)
-    path=$(_explode exec path mutation_post_add)
+    data="$(_ju o "activity:$activity" "title:$title" "others:$others" | _explode exec --stdin body mutation_post_add_legacy)"
+    headers=$(_explode exec headers mutation_post_add_legacy)
+    host=$(_explode exec host mutation_post_add_legacy)
+    path=$(_explode exec path mutation_post_add_legacy)
     (
       QUORA_CREDENTIALS=$(_submit-credentials) _curl \
         data:"$data" \
@@ -1253,15 +1253,7 @@ _explodeable() {
       dispatch "$@"
     }
 
-    _mutation_post_add() {
-
-      _host() {
-        echo '"profilereports.quora.com"'
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
-      }
+    _mutation_post_add_legacy() {
 
       _body() {
         echo '
@@ -1271,7 +1263,7 @@ _explodeable() {
               "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
             },
             "variables": {
-              "tribeId": 2841204,
+              "tribeId": .tribeId//2841204,
               "title": {
                 "sections": [
                   {
@@ -1309,8 +1301,64 @@ _explodeable() {
         '
       }
 
+      _host() {
+        echo '"profilereports.quora.com"'
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
+      }
+
       _requires() {
         _ju o 'body:["profile_report_contents"]' 'headers:["lib"]'
+      }
+
+      dispatch "$@"
+    }
+
+    _mutation_post_add() {
+
+      _host() {
+        jq -nc --arg host "${HOST:-profilereports.quora.com}" '$host'
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
+      }
+
+      _body() {
+        echo '
+          {
+            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+            "extensions": {
+              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+            },
+            "variables": {
+              "tribeId": (.tribeId//2841204),
+              "title": (.title|tojson),
+              "content": (.content|tojson),
+              "shouldQueue": (.shouldQueue//true),
+              "accessOption": null,
+              "credentialId": null
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _requires() {
+        _ju o 'headers:["lib"]'
       }
 
       dispatch "$@"
