@@ -970,37 +970,44 @@ _query() {
   }
 
   _adult-dating() {
+    _simple-profiles | jq -c 'select(((.space_links//[])|length) > 0)|.isSpam=true'
+  }
 
-    SAVED="$(_simple-profiles | jq -c 'select(((.space_links//[])|length) > 0)')"
+  _simple-space-page() {
+    local url=$1
 
-    FEEDER_PAGES=$(echo "$SAVED" | jq -r '.space_links[0]' | sort | uniq)
+    eval "$(jq --arg url "$url" -n '
+      $url
+      |[.|match("https://([^/]*)(/.*)")|.captures[].string
+      ]
+      |{"host": .[0], "path":.[1]}
+    ' | _ju to env)"
 
-    PAGES_TO_USERS=$(echo "$FEEDER_PAGES" | while read p; do
-      let after=0
+    _cache exec _curl \
+      method:GET \
+      host:$host \
+      path:$path | _filter html | jq --arg url "$url" '{"nodeId": .data.tribeItem.post.id, "url": $url}'
+  }
+
+  _simple-shares() {
+    local url=$1
+
+    page="$(_simple-space-page "$url")"
+    eval "$(echo "$page" | ju pipe 'select nodeId|to env')"
+    local profiles=$(
+      let after=-1
       let stride=10
-      local nodeId=$(_nodeId "$p")
-      v=$(while true; do
-        out=$(_cache exec _post shares "nodeId:$nodeId" "first:$stride" "after:$after" \
-        | jq -r '.data.node.sharePostsConnection.edges[].node.author.profileUrl')
+      while true; do
+        out=$(
+          _cache exec _post shares "nodeId:$nodeId" "first:$stride" "after:$after" \
+          | jq -r '.data.node.sharePostsConnection.edges[].node.author.profileUrl'
+        )
         test -z "$out" && break
         echo "$out"
         let after=after+stride
-      done | jq -R . | jq -sc .)
-      ju o "key:$p" "value:$v"
-    done | jq -s from_entries)
-
-    QUALIFIES=$(echo "$PAGES_TO_USERS" | jq -r 'to_entries[]|.value[]' | while read profileUrl; do
-      _simple-profile "$profileUrl"
-    done | while read -r profile; do
-      local uid=$(echo "$profile" | jq -r '.uid')
-      local activity_summary="$(_cache exec _activity-summary "$uid")"
-      jq -nc --argjson "activity_summary" "$activity_summary" "$profile|.activity_summary=$activity_summary"
-    done | jq -c 'select(.activity_summary.upvotes.count > 50)|.isSpam=true')
-
-    PAGES_TO_USERS=$(echo "$QUALIFIES" | jq -cs 'reduce .[] as $o ({}; if .|has($o.space_links[0]) then .[$o.space_links[0]]|=(.+[$o.profileUrl]) else .[$o.space_links[0]]=[$o.profileUrl] end)')
-    echo "$QUALIFIES" | while read -r profile; do
-      echo "$profile" | jq -c --argjson "pages" "$PAGES_TO_USERS" '.others=$pages[.space_links[0]]'
-    done
+      done | jq -R . | jq -sc .
+    )
+    jq -nc --argjson page "$page" --argjson profiles "$profiles" '$page|.profiles=$profiles'
   }
 
   _nodeId() {
