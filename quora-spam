@@ -914,6 +914,21 @@ _process() {
   local selector=$1
 
   test -n "$selector" || die "process {selector}"
+
+  _explode-adult-dating() {
+    (
+      _query adult-dating \
+      | jq -r .space_links[] \
+      | sort \
+      | uniq \
+      | while read url; do _query simple-shares "$url"; done \
+      | jq -r .profiles[] \
+      | while read profileUrl; do _cache exec _query simple-profile "$profileUrl"; done \
+      | jq -r .uid \
+      | while read uid; do _cache exec _query activity-summary "$uid"; done
+    )
+  }
+
   if test "$(type -t "_$selector")" = "function"; then
     dispatch "$@"
   else
@@ -928,7 +943,6 @@ _query() {
     test -n "$uid" || die "usage: activity-summary {uid}"
 
     while true; do
-      echo "activity-summary: $uid" 1>&2
       count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0')
       count=${count:-0}
       if test "${count:-0}" -gt 2; then
