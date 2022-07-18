@@ -1111,6 +1111,28 @@ _report() {
     done
  }
 
+ _adult-dating() {
+    while read -r profile; do
+      (
+        eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
+        if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
+          continue
+        fi
+        echo "$profile"
+        if test "$isRead" = "false"; then
+          _post markAsRead "$sncid"
+        fi
+        #if test "$isBlockedByViewer" = "false"; then
+          _post report "uid:$uid" "message:This profile is generating upvote spam at between 20-60 upvotes per hour intended to drive viewers to visit adultdating.quora.com." | jq -c .;
+        #fi
+        if test "$viewerHasMuted" = "false"; then
+          _post mute "$uid"
+        fi
+      ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
+      sleep 5;
+    done
+ }
+
  jq -c 'select(.isSpam)' | dispatch "$@"
 }
 
