@@ -881,6 +881,19 @@ _post() {
 
   }
 
+  _queue-post() {
+    (
+      HOST=profilereports.quora.com
+      QUORA_CREDENTIALS=$(_submit-credentials)
+      _curl \
+        "method:POST" \
+        "host:$HOST" \
+        "path:$(_explode exec path mutation_post_add)" \
+        "headers:$(_explode exec headers mutation_post_add)" \
+        "data:$(_explode exec --stdin body mutation_post_add)"
+    ) || exit $?
+  }
+
   _report() {
     local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
     _curl \
