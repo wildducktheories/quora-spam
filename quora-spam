@@ -847,6 +847,23 @@ _post() {
             }'
   }
 
+  _block() {
+    local uid=$1
+
+    test -n "$uid" || die "usage: post mute {uid}"
+
+    _curl \
+      method:POST \
+      path:"$(_explode exec path mutation_user_block)" \
+      headers:"$(_explode exec headers mutation_user_block)" \
+      data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_block)" \
+      | jq -c --arg uid "$uid" '
+            {
+                "uid": $uid,
+                "isBlockedByViewer": .data.userSetBlock.targetUser.isBlockedByViewer
+            }'
+  }
+
   _markAsRead() {
     local sncid="$1"
 
@@ -1399,6 +1416,44 @@ _explodeable() {
         echo '{"headers":["lib"]}'
       }
 
+      dispatch "$@"
+    }
+
+    #/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation
+    _mutation_user_block() {
+      _body() {
+        echo '{
+          "queryName": "userBlockModalInnerUtils_userSetBlock_Mutation",
+          "extensions": {
+            "hash": "fc7232c06fc858107eba5ff2469a96639fc5834eb503cb2d1db2793e89770527"
+          },
+          "variables": {
+            "targetUid": .uid,
+            "shouldBlock": (.shouldBlock//true)
+          }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan52-8888";"react_rprdkoatidvglkuq";"kvXJ";"e5a157d98f80bfc3ee6d4b7638a56c30fa3bacc4")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+        :
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
       dispatch "$@"
     }
 
