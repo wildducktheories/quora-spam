@@ -1120,6 +1120,10 @@ _query() {
     | _filter html
   }
 
+  _young-profiles() {
+    _query simple-profiles | jq -c 'select(.profileAge < 7)|.isYoung=true'
+  }
+
   dispatch "$@"
 }
 
