@@ -1169,6 +1169,7 @@ _report() {
         if test "$viewerHasMuted" = "false"; then
           _post mute "$uid"
         fi
+        CACHE_BUST=true _query simple-profile $profileUrl | jq -c 'del(.isSpam)'
       ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
       sleep 5;
     done
