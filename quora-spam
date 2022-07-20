@@ -352,7 +352,7 @@ _filter() {
               |.sections[]
               |.spans[]
               |.modifiers.embed.url
-              |select(startswith("https://adultdating.quora.com"))
+              |select(. and startswith("https://adultdating.quora.com"))
             ) else
               empty
             end
