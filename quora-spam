@@ -921,17 +921,13 @@ _process() {
   test -n "$selector" || die "process {selector}"
 
   _explode-adult-dating() {
-    (
-      _query adult-dating \
-      | jq -r .space_links[] \
-      | sort \
-      | uniq \
-      | while read url; do _query simple-shares "$url"; done \
-      | jq -r .profiles[] \
-      | while read profileUrl; do _cache exec _query simple-profile "$profileUrl"; done \
-      | jq -r .uid \
-      | while read uid; do _cache exec _query activity-summary "$uid"; done
-    )
+    _query explode-adult-dating | while read profile; do
+      eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,profileUrl,activity_summary|to env')"
+      if test "$isBlockedByViewer" = "false"; then
+        _post block $uid
+        CACHE_BUST=true _query simple-profile $profileUrl | jq -sc "$profile*(.[0]|del(.isSpam))"
+      fi
+    done
   }
 
   if test "$(type -t "_$selector")" = "function"; then
@@ -990,6 +986,24 @@ _query() {
 
   _adult-dating() {
     _simple-profiles | jq -c 'select(((.space_links//[])|length) > 0)|.isSpam=true'
+  }
+
+  _explode-adult-dating() {
+    (
+      _query adult-dating \
+      | jq -r .space_links[] \
+      | sort \
+      | uniq \
+      | while read url; do _query simple-shares "$url"; done \
+      | jq -r .profiles[] \
+      | while read profileUrl; do _query simple-profile "$profileUrl"; done \
+      | while read profile; do
+        local uid=$(echo "$profile" | jq -r ".uid")
+        if test -n "$uid"; then
+          _cache exec _query activity-summary "$uid" | jq -cs "$profile*.[0]";
+        fi
+      done
+    )
   }
 
   _simple-space-page() {
