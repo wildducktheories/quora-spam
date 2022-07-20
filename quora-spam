@@ -957,7 +957,7 @@ _query() {
       test -n "$uid" || die "usage: activity-summary {uid}"
 
       while true; do
-        count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0')
+        count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0') || die "query: activity-summary: count failed"
         count=${count:-0}
         if test "${count:-0}" -gt 10; then
           first=$(_post activity uid:$uid first:10 after:$(expr $count - 10) | _filter simple-activity) || die "query: activity-summary: first failed: uid:$uid"
