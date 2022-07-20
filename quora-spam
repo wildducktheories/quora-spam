@@ -162,17 +162,16 @@ _curl() {
 
       test $rc -eq 0 || die "curl: non-zero exit code: $rc"
 
-      ju o \
+      _ju o \
         "agent:$(
-          ju o \
+          _ju o \
             "args:$args" \
             "diagnostics:$(jq -c . <$diagnostics)" \
             "verbose:$(jq -sR . <$verbose)" \
             | jq -c 'with_entries(if .value=="" then empty else . end)'
         )" \
         "request:$(
-          ju o \
-            "host:$host" \
+          _ju o "host:$host" \
             "method:$method" \
             "path:$path" \
             "headers:$headers" \
@@ -182,7 +181,7 @@ _curl() {
 
         )" \
         "response:$(
-          ju o \
+          _ju o \
             "body:$response_body" \
             "headers:$response_headers"
         )" \
@@ -257,7 +256,7 @@ _filter() {
       |.profileUrl=.userNames[0].profileUrl
       |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)][-1]
     ' \
-    | ju select 'uid,url,text,timestamp,profileUrl'
+    | _ju select 'uid,url,text,timestamp,profileUrl'
   }
 
   _headers-as-map() {
@@ -1031,7 +1030,7 @@ _query() {
     local url=$1
 
     page="$(_simple-space-page "$url")"
-    eval "$(echo "$page" | ju pipe 'select nodeId|to env')"
+    eval "$(echo "$page" | _ju pipe 'select nodeId|to env')"
     local profiles=$(
       let after=-1
       let stride=10
