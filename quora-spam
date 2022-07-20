@@ -96,7 +96,9 @@ _curl() {
 
   headers=${headers:-{\}}
 
-  eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to env')"
+  local host method path data headers args
+
+  eval "$(echo "$o" | _ju pipe 'select host,method,path,data,headers,args|to local')"
 
   case "$method" in
     (GET)
