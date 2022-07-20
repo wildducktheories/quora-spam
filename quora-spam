@@ -940,48 +940,53 @@ _process() {
 _query() {
 
   _activity-summary() {
+
     local uid=$1
-    test -n "$uid" || die "usage: activity-summary {uid}"
+    (
+      set -e
+      test -n "$uid" || die "usage: activity-summary {uid}"
 
-    while true; do
-      count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0')
-      count=${count:-0}
-      if test "${count:-0}" -gt 2; then
-        first=$(_post activity uid:$uid first:10 after:$(expr $count - 10) | _filter activity-summary)
-        last=$(_post activity uid:$uid first:1 after:0 | _filter activity-summary)
-      else
-        first=null
-        last=null
-        break
-      fi
-      if test -n "$first" -a -n "$last"; then
-        break
-      fi
-    done
+      while true; do
+        count=$(_post activity uid:$uid first:1 after:998 | jq -r '.data.user.activityConnection.pageInfo.endCursor//0')
+        count=${count:-0}
+        if test "${count:-0}" -gt 10; then
+          first=$(_post activity uid:$uid first:10 after:$(expr $count - 10) | _filter activity-summary)
+          last=$(_post activity uid:$uid first:1 after:0 | _filter activity-summary)
+        else
+          count=0
+          first=null
+          last=null
+          break
+        fi
+        if test -n "$first" -a -n "$last"; then
+          break
+        fi
+      done
 
-    jq -nc \
-      --argjson count "${count:0}" \
-      --argjson first "${first}" \
-      --argjson last "${last}" \
-      --argjson uid "$uid" '
-    (if $count > 0 then (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) else 0 end) as $active
-    |(if $count > 0 then ($count*36000/$active|round|./10) else 0 end) as $rate
-    |{
-        uid: $uid,
-        profileUrl: $first.profileUrl,
+      jq -nc \
+        --argjson count "${count:0}" \
+        --argjson first "${first}" \
+        --argjson last "${last}" \
+        --argjson uid "$uid" '
+      (if $count > 0 then (($last.timestamp|fromdateiso8601)-($first.timestamp|fromdateiso8601)) else 0 end) as $active
+      |(if $count > 0 then ($count*36000/$active|round|./10) else 0 end) as $rate
+      |{
+          uid: $uid,
+          profileUrl: $first.profileUrl,
 
-        upvotes: {
-          count: $count,
-          active_seconds: $active,
-          active_hours: ($active/360|round|./10),
-          rate_per_hour: $rate,
-          first: ($first|del(.uid)|del(.profileUrl)),
-          last: ($last|del(.uid)|del(.profileUrl))
-        }|(if (.first) then . else del(.first) end)
-         |(if (.last) then . else del(.last) end)
-    }
-    |if (.profileUrl) then . else del(.profileUrl) end
-    '
+          upvotes: {
+            count: $count,
+            active_seconds: $active,
+            active_hours: ($active/360|round|./10),
+            rate_per_hour: $rate,
+            first: ($first|del(.uid)|del(.profileUrl)),
+            last: ($last|del(.uid)|del(.profileUrl))
+          }|(if (.first) then . else del(.first) end)
+           |(if (.last) then . else del(.last) end)
+      }
+      |if (.profileUrl) then . else del(.profileUrl) end
+      '
+    ) || die "activity-summary failed for uid=$uid"
   }
 
   _adult-dating() {
