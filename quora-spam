@@ -1394,7 +1394,7 @@ _explodeable() {
               "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
             },
             "variables": {
-              "tribeId": .tribeId//2841204,
+              "tribeId": (.tribeId//2841204),
               "title": {
                 "sections": [
                   {
