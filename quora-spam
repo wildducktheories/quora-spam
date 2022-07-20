@@ -802,6 +802,10 @@ _ju() {
       )[]'
     }
 
+    _local() {
+      _env | sed "s/^/local /";
+    }
+
     _keys() {
         jq -cr 'select(type == "object")|[to_entries[].key|tostring]|join("\t")'
     }
