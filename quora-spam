@@ -1215,6 +1215,10 @@ _explodeable() {
     echo "empty"
   }
 
+  _host() {
+    jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
+  }
+
   _path() {
     echo '""'
   }
