@@ -260,6 +260,16 @@ _filter() {
     | _ju select 'uid,url,text,timestamp,profileUrl'
   }
 
+  _busy-profiles() {
+    (
+      set -e
+      while read -r profile; do
+        eval "$(echo "$profile" | _ju pipe 'select uid|to env')"
+        _cache exec _query activity-summary "$uid" | jq -sc "$profile*(.[0]|{\"activity_summary\": .})" || die "busy-profiles: activity-summary: failed"
+      done | jq -c --argjson "limit" "${limit:-10}" 'select(.activity_summary.upvotes.rate_per_hour>$limit)|.isBusy=true'
+    ) || die "busy-profiles: failed"
+  }
+
   _headers-as-map() {
     jq '
       reduce .[] as $o (
@@ -991,6 +1001,10 @@ _query() {
 
   _adult-dating() {
     _simple-profiles | jq -c 'select(((.space_links//[])|length) > 0)|.isSpam=true'
+  }
+
+  _busy-profiles() {
+    _query simple-profiles | _filter busy-profiles
   }
 
   _explode-adult-dating() {
