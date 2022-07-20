@@ -952,6 +952,7 @@ _query() {
   _activity-summary() {
 
     local uid=$1
+    #echo "activity-summary: uid=$uid" 1>&2
     (
       set -e
       test -n "$uid" || die "usage: activity-summary {uid}"
