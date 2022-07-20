@@ -332,6 +332,11 @@ _filter() {
       "profileUrl":.data.user.profileUrl,
       "isBlockedByViewer": .data.user.isBlockedByViewer,
       "viewerHasMuted": .data.user.viewerHasMuted,
+      "isUserBanned": .data.user.isUserBanned,
+      "followingCount": .data.user.followingCount,
+      "followerCount": .data.user.followingCount,
+      "creationTime": .data.user.creationTime,
+      "profileAge": (((((now|round) - (.data.user.creationTime/1000000))/8640)|round)/10),
       "isSpam": false,
       "links": [
           .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
