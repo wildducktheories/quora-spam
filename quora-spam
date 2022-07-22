@@ -946,7 +946,7 @@ _post() {
     ) || exit $?
   }
 
-  _report() {
+  _report-legacy() {
     local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
     _curl \
       method:POST \
@@ -1194,7 +1194,7 @@ _report() {
           _post markAsRead "$sncid"
         fi
         if test "$isBlockedByViewer" = "false"; then
-          _post report "uid:$uid" "message:Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
+          _post report-legacy "uid:$uid" "message:Spammy upvote from profile with deceptive sweethotgirls/hotsweetgirls link (sncid:$sncid)" | jq -c .;
           _file-profile-report "$profileUrl"
         fi
         if test "$viewerHasMuted" = "false"; then
@@ -1218,7 +1218,7 @@ _report() {
           _post markAsRead "$sncid"
         fi
         if test "$isBlockedByViewer" = "false"; then
-          _post report "uid:$uid" "message:This profile is generating upvote spam at between 20-60 upvotes per hour intended to drive viewers to visit adultdating.quora.com." | jq -c .;
+          _post report-legacy "uid:$uid" "message:This profile is generating upvote spam at between 20-60 upvotes per hour intended to drive viewers to visit adultdating.quora.com." | jq -c .;
         fi
         if test "$viewerHasMuted" = "false"; then
           _post mute "$uid"
