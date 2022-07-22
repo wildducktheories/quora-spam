@@ -1677,6 +1677,52 @@ _explodeable() {
 
     }
 
+    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
+    _mutation_report_add() {
+      _body() {
+        echo '{
+          "queryName": "ReportModalInner_reportAdd_Mutation",
+          "extensions": {
+            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+          },
+          "variables": {
+            "reason": "spam",
+            "targetType": "user",
+            "reportableId": .uid,
+            "comment": (
+              {
+                "activity": .activity_summary,
+                "others": .others
+              }
+              |profile_report_contents),
+          }
+        }|.variables.comment|=tojson'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
+      }
+
+      _requires() {
+        echo '{"body":["profile_report_contents"],"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+
+    }
+
     _profile() {
       _path() {
         echo '"/profile/"+(.profileUrl|@uri)'
