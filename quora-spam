@@ -330,6 +330,24 @@ _filter() {
     fi
   }
 
+  _others() {
+    local query=$1
+    test -n "$query" || die "filter: others: usage: filter others {query}"
+    local all_others="$(_query $query|jq -sc 'map(.profileUrl)')"
+    while read -r profile; do
+      local others
+      eval "$(echo "$profile" | _ju pipe 'select others|to env')"
+      if test -n "$others"; then
+        echo "$profile"
+      else
+        jq -nc \
+          --argjson all_others "$all_others" \
+          --argjson profile "$profile" \
+          '$profile|.others=($all_others|map(select(.!=$profile.profileUrl)))'
+      fi
+    done
+  }
+
   _simple-notifications() {
     jq -c '
         .data.viewer.sentNotifCollectionsConnection.edges[].node
