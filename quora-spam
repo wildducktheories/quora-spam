@@ -262,14 +262,27 @@ _filter() {
     | _ju select 'uid,url,text,timestamp,profileUrl'
   }
 
-  _busy-profiles() {
+  _activity-summary() {
     (
       set -e
       while read -r profile; do
-        eval "$(echo "$profile" | _ju pipe 'select uid|to env')"
-        _cache exec _query activity-summary "$uid" | jq -sc "$profile*(.[0]|{\"activity_summary\": .})" || die "busy-profiles: activity-summary: failed"
-      done | jq -c --argjson "limit" "${limit:-10}" 'select(.activity_summary.upvotes.rate_per_hour>$limit)|.isBusy=true'
-    ) || die "busy-profiles: failed"
+        local uid activity_summary;
+        eval "$(echo "$profile" | _ju pipe 'select uid,activity_summary|to env')"
+        if test -n "$activity_summary"; then
+          echo "$profile"
+        else
+          _cache exec _query activity-summary "$uid" | jq -sc "$profile*(.[0]|{\"activity_summary\": .})" || die "filter: activity-summary: failed"
+        fi
+      done
+    ) || exit $?
+  }
+
+  _busy-profiles() {
+    _filter activity-summary \
+    | jq -c --argjson \
+      "limit" "${limit:-10}" \
+      'select(.activity_summary.upvotes.rate_per_hour>$limit)|.isBusy=true' \
+    || die "busy-profiles: failed"
   }
 
   _headers-as-map() {
