@@ -47,21 +47,6 @@ _cache() {
   dispatch "$@"
 }
 
-_credentials() {
-  if test -z "$QUORA_CREDENTIALS"; then
-    export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
-  fi
-  echo "$QUORA_CREDENTIALS"
-}
-
-_submit-credentials() {
-  if test -f "${QUORA_DOTFILES}/submit-credentials"; then
-    cat "${QUORA_DOTFILES}/submit-credentials"
-  else
-    _credentials
-  fi
-}
-
 _config() {
   _require dotfiles
 
@@ -84,6 +69,13 @@ _config() {
   }
 
   dispatch "$@"
+}
+
+_credentials() {
+  if test -z "$QUORA_CREDENTIALS"; then
+    export QUORA_CREDENTIALS=$(test -f "$QUORA_DOTFILES/credentials" && cat "$QUORA_DOTFILES/credentials")
+  fi
+  echo "$QUORA_CREDENTIALS"
 }
 
 _curl() {
@@ -209,6 +201,829 @@ _curl() {
   )||exit $?
 }
 
+# explodes template
+_explode() {
+  EXPLODEABLE=${EXPLODEABLE:-_explodeable}
+
+  _exec() {
+    local use_stdin=false
+    if test "$1" = "--stdin"; then
+      use_stdin=true
+      shift 1
+    fi
+    local template=$(dispatch part "$@")
+    if $use_stdin; then
+      jq -c "$template"
+    else
+      jq -nc "$template"
+    fi
+  }
+
+  _part() {
+    local part=$1
+    local template=$2
+
+    for r in $(_explode requires "$part" "$template" | tsort); do
+      echo "def $r:"
+      ${EXPLODEABLE} "$r" "$part" | sed "s/^/  /"
+      echo ";"
+    done | _filter jqc
+    echo $template
+  }
+
+  _requires() {
+    local part=$1
+    local template=$2
+    local dependency
+
+    ($EXPLODEABLE "$template" requires) \
+    | jq -r --arg part "$part" '(.[$part]//[])|.[]' \
+    | tr ' ' \\012 \
+    | while read dependency; do
+      (_explode requires "$part" "$dependency" )
+      echo "$dependency" "$template"
+    done
+    echo "$template" "$template"
+  }
+
+  cmd=$1
+  case "$cmd" in
+    exec|requires|part)
+      :
+    ;;
+    *)
+      set -- part "$@"
+    ;;
+  esac
+
+  dispatch "$@"
+}
+
+_explodeable() {
+
+  _body() {
+    echo "empty"
+  }
+
+  _headers() {
+    echo "{}"
+  }
+
+  _host() {
+    jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
+  }
+
+  _path() {
+    echo '""'
+  }
+
+  _requires() {
+    echo '{"path":[],"body":[],"headers":[]}'
+  }
+
+  _templates() {
+    _accept() {
+      _headers() {
+        jq -nc '{
+          "accept": "*/*",
+          "accept-encoding": "gzip, deflate, br",
+          "accept-language": "en-AU,en;q=0.9,en-US;q=0.8"
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _cache_control_max_age_0() {
+      echo '{"cache-control": "max-age=0"}'
+    }
+
+    _content_type_json() {
+      _headers() {
+        echo '{"content-type": "application/json"}'
+      }
+      dispatch "$@"
+    }
+
+    _lib() {
+      _requires() {
+        jq -nc '{
+          "headers": [
+            "accept",
+            "cache_control_max_age_0",
+            "content_type_json",
+            "origin",
+            "origin_profile_reports",
+            "sec_ch_ua",
+            "sec_fetch_document_navigate_same_origin",
+            "sec_fetch_empty_cors_same_origin",
+            "upgrade_insecure_requests",
+            "user_agent"
+          ]
+        }'
+      }
+
+      _headers() {
+        echo '
+          .;
+          def quora(ch;w;s;r):
+            {
+              "quora-broadcast-id": (ch+"-"+w+"-"+s),
+              "quora-canary-revision": "false",
+              "quora-revision": r,
+              "quora-window-id": w
+            }
+        '
+      }
+
+      dispatch "$@"
+    }
+
+    _origin() {
+      _headers() {
+        jq -nc --arg host "${HOST:-www.quora.com}" '{"origin": "https://\($host)"}'
+      }
+      dispatch "$@"
+    }
+
+    _origin_profile_reports() {
+      _headers() {
+        echo '{"origin": "https://profilereports.quora.com"}'
+      }
+      dispatch "$@"
+    }
+
+
+    _mutation_notification_markAsRead() {
+      _body() {
+        echo '{
+          "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
+          "extensions":{
+            "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
+          },
+          "variables":{
+            "sncid":.sncid,
+            "source":"notif_page",
+            "shouldLogClick":true
+          }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_pxemluvapjrirdhr";"UQaz";"b9c9c3eca0656a91bd2c1aa588dcc28495fe1684")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _mutation_post_add() {
+
+      _body() {
+        echo '
+          {
+            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+            "extensions": {
+              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+            },
+            "variables": {
+              "tribeId": (.tribeId//2841204),
+              "title": (.title|tojson),
+              "content": (.content|tojson),
+              "shouldQueue": (.shouldQueue//true),
+              "accessOption": null,
+              "credentialId": null
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _host() {
+        jq -nc --arg host "${HOST:-profilereports.quora.com}" '$host'
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
+      }
+
+      _requires() {
+        _ju o 'headers:["lib"]'
+      }
+
+      dispatch "$@"
+    }
+
+    _mutation_post_add_legacy() {
+
+      _body() {
+        echo '
+          {
+            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
+            "extensions": {
+              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
+            },
+            "variables": {
+              "tribeId": (.tribeId//2841204),
+              "title": {
+                "sections": [
+                  {
+                    "type": "plain",
+                    "spans": [
+                      {
+                        "text": .title,
+                        "modifiers": {}
+                      }
+                    ],
+                    "indent": 0,
+                    "is_rtl": false,
+                    "quoted": false
+                  }
+                ]
+              }|tojson,
+              "content": (profile_report_contents|tojson),
+              "shouldQueue": (.shouldQueue//true),
+              "accessOption": null,
+              "credentialId": null
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin_profile_reports
+          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _host() {
+        echo '"profilereports.quora.com"'
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
+      }
+
+      _requires() {
+        _ju o 'body:["profile_report_contents"]' 'headers:["lib"]'
+      }
+
+      dispatch "$@"
+    }
+
+
+    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
+    _mutation_report_add_legacy() {
+      _body() {
+        echo '{
+          "queryName": "ReportModalInner_reportAdd_Mutation",
+          "extensions": {
+            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+          },
+          "variables": {
+            "reason": "spam",
+            "targetType": "user",
+            "reportableId": .uid,
+            "comment": {
+              "sections": [
+                {
+                  "type": "plain",
+                  "indent": 0,
+                  "quoted": false,
+                  "is_rtl": false,
+                  "spans": [
+                    {
+                      "modifiers": {},
+                      "text": .message
+                    }
+                  ]
+                }
+              ],
+              "caret": {
+                "start": {
+                  "spanIdx": 0,
+                  "sectionIdx": 0,
+                  "offset": 59
+                },
+                "end": {
+                  "spanIdx": 0,
+                  "sectionIdx": 0,
+                  "offset": 59
+                }
+              }
+            }
+          }
+        }|.variables.comment|=tojson'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+
+    }
+
+    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
+    _mutation_report_add() {
+      _body() {
+        echo '{
+          "queryName": "ReportModalInner_reportAdd_Mutation",
+          "extensions": {
+            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
+          },
+          "variables": {
+            "reason": "spam",
+            "targetType": "user",
+            "reportableId": .uid,
+            "comment": (
+              {
+                "activity": .activity_summary,
+                "others": .others
+              }
+              |profile_report_contents),
+          }
+        }|.variables.comment|=tojson'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
+      }
+
+      _requires() {
+        echo '{"body":["profile_report_contents"],"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+
+    }
+
+    #/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation
+    _mutation_user_block() {
+      _body() {
+        echo '{
+          "queryName": "userBlockModalInnerUtils_userSetBlock_Mutation",
+          "extensions": {
+            "hash": "fc7232c06fc858107eba5ff2469a96639fc5834eb503cb2d1db2793e89770527"
+          },
+          "variables": {
+            "targetUid": .uid,
+            "shouldBlock": (.shouldBlock//true)
+          }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan52-8888";"react_rprdkoatidvglkuq";"kvXJ";"e5a157d98f80bfc3ee6d4b7638a56c30fa3bacc4")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+        :
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+      dispatch "$@"
+    }
+
+    # /graphql/gql_POST?q=UserMute_userMute_Mutation
+    _mutation_user_mute() {
+      _body() {
+        echo '{
+          "queryName": "UserMute_userMute_Mutation",
+          "extensions": {
+            "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
+          },
+          "variables": {
+            "uid": .uid
+          }
+        }'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("ain-w-chan50-8888";"react_kudnreowtdanpzoc";"Gj7m";"906b08c33432ec92a44754fc91a61a035a43a5e0")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+        :
+      }
+
+      _path() {
+        echo '"/graphql/gql_POST?q=UserMute_userMute_Mutation"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _profile() {
+      _path() {
+        echo '"/profile/"+(.profileUrl|@uri)'
+      }
+
+      _headers() {
+        echo '
+          accept
+          *cache_control_max_age_0
+          *sec_ch_ua
+          *sec_fetch_document_navigate_same_origin
+          *upgrade_insecure_requests
+          *user_agent
+        '
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _profile_report_contents() {
+      _body() {
+        echo '
+          .activity as $activity
+          |.others as $others
+          |{
+            "sections": [
+              {
+                "type": "plain",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {},
+                    "text": "This "
+                  },
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.profileUrl)"
+                      }
+                    },
+                    "text": "profile"
+                  },
+                  {
+                    "modifiers": {},
+                    "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
+                  }
+                ]
+              },
+              {
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.upvotes.first.url)"
+                      }
+                    },
+                    "text": "\($activity.upvotes.first.timestamp) - #1"
+                  }
+                ]
+              },
+              {
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": "https://www.quora.com\($activity.upvotes.last.url)"
+                      }
+                    },
+                    "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
+                  }
+                ]
+              },
+              {
+                "type": "plain",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {},
+                    "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
+                  }
+                ]
+              },
+              ($others|map({
+                "type": "unordered-list",
+                "indent": 0,
+                "quoted": false,
+                "is_rtl": false,
+                "spans": [
+                  {
+                    "modifiers": {
+                      "link": {
+                        "type": "url",
+                        "url": ("https://www.quora.com"+.)
+                      }
+                    },
+                    "text": (.|sub("/profile/";"")),
+                  },
+                  {
+                    "modifiers": {},
+                    "text": "\n"
+                  }
+                ]
+                }))
+              ]|flatten,
+            "caret": {
+              "start": {
+                "spanIdx": 0,
+                "sectionIdx": 0,
+                "offset": 12
+              },
+              "end": {
+                "spanIdx": 0,
+                "sectionIdx": 0,
+                "offset": 12
+              }
+            }
+          }
+        '
+      }
+
+      dispatch "$@"
+
+    }
+
+    # "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
+    _query_activity() {
+      _body() {
+        echo '
+          {
+            "queryName": "UserProfileActivity_feedStories_Query",
+            "extensions": {
+              "hash": "b3ec746645150c155aa601c727d305812f83ee56365bed740487ff58358c3814"
+            },
+            "variables": {
+              "uid": .uid,
+              "first": .first,
+              "after": (.after|tostring)
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan50-8888";"react_gvkeyzfhoyeeovpl";"bvTC";"6f83bc46e0b270f21d00421c8be3cf5d978036f3")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"'
+      }
+
+      _requires() {
+        echo '{"headers": ["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _query_shares() {
+
+      _body() {
+        echo '
+          {
+            "queryName": "SharePostsPagedListQuery",
+            "extensions": {
+              "hash": "ad3fdfef026be57dc1f334e6c00638d4ed7b7037149990a3ffb33b0c37d4cd3c"
+            },
+            "variables": {
+              "nodeId": .nodeId,
+              "first": .first,
+              "after": (.after|tostring)
+            }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_klvmidphlajzcwqe";"FdjV";"f4c2c2ff6b34f3f0dcd5d8a71b45003d84e1633d")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _host() {
+        jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
+      }
+
+      _path() {
+        echo '"/graphql/gql_para_POST?q=SharePostsPagedListQuery"'
+      }
+
+      _requires() {
+        echo '{"headers": ["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _sec_ch_ua() {
+      _headers() {
+        jq -nc '{
+          "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": "\"macOS\"",
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _sec_fetch_document_navigate_same_origin() {
+      _headers() {
+        echo '
+          {
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "same-origin"
+          }
+        '
+      }      
+      dispatch "$@"
+    }
+
+    _sec_fetch_empty_cors_same_origin() {
+      _headers() {
+        jq -nc '{
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+          "sec-fetch-user": "?1",
+        }'
+      }
+      dispatch "$@"
+    }
+
+    _upgrade_insecure_requests() {
+      _headers() {
+        echo '{"upgrade-insecure-requests": "1"}'
+      }
+
+      dispatch "$@"
+    }
+
+
+    _upvotes() {
+      _headers() {
+        echo '
+          accept
+          *cache_control_max_age_0
+          *sec_ch_ua
+          *sec_fetch_document_navigate_same_origin
+          *upgrade_insecure_requests
+          *user_agent
+        '
+      }
+
+      _path() {
+        echo '"/notifications/upvotes"'
+      }
+
+      _requires() {
+        echo '{"headers":["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
+    _user_agent() {
+      _headers() {
+        echo '{"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"}'
+      }
+      dispatch "$@"
+    }
+
+    dispatch "$@"
+  }
+
+
+
+  local template=$1
+  local part=$2
+
+  dispatch templates "$template" "$part"
+}
+
+
+__to() {
+  _curl-args() {
+    jq -r '
+      if type=="object" then
+        to_entries[]|"-H\t"+.key+": "+.value
+      elif type=="array" then
+        .|join("\t")
+      else
+        .
+      end' | tr \\012 \\011 | sed "s/.\$//"
+  }
+  dispatch "$@"
+}
+
+
 _file-profile-report() {
   local profile=${1#/profile/}
 
@@ -248,20 +1063,6 @@ _file-profile-report() {
 
 _filter() {
 
-  _simple-activity() {
-    local bias=${1:--1}
-    jq --argjson bias "$bias" '
-      [.data.user.activityConnection.edges[].node as $node
-      |$node.feedReason
-      |select(.__isFeedReason=="UserUpvotedAnswerReason")
-      |.uid=.userNames[0].uid
-      |.timestamp|=(./1000000|round|todateiso8601)
-      |.profileUrl=.userNames[0].profileUrl
-      |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)][$bias]
-    ' \
-    | _ju select 'uid,url,text,timestamp,profileUrl'
-  }
-
   _activity-summary() {
     (
       set -e
@@ -283,6 +1084,52 @@ _filter() {
       "limit" "${limit:-10}" \
       'select(.activity_summary.upvotes.rate_per_hour>$limit)|.isBusy=true' \
     || die "busy-profiles: failed"
+  }
+  # converts a full profile into a simple profile
+  _full-to-simple-profile() {
+    jq -c '{
+      "uid": .data.user.uid,
+      "profileUrl":.data.user.profileUrl,
+      "isBlockedByViewer": .data.user.isBlockedByViewer,
+      "viewerHasMuted": .data.user.viewerHasMuted,
+      "isUserBanned": .data.user.isUserBanned,
+      "followingCount": .data.user.followingCount,
+      "followerCount": .data.user.followingCount,
+      "creationTime": .data.user.creationTime,
+      "profileAge": (((((now|round) - (.data.user.creationTime/1000000))/8640)|round)/10),
+      "isSpam": false,
+      "links": [
+          .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
+          |select(.modifiers.link!=null)
+          |{"text":.text, "url":.modifiers.link.url}
+       ],
+      "space_links": [
+          .data.user.combinedProfileFeedConnection.edges[]
+          |.node.post.contentQtextDocument.legacyJson
+          |(
+            if . then (
+              fromjson
+              |.sections[]
+              |.spans[]
+              |.modifiers.embed.url
+              |select(. and startswith("https://adultdating.quora.com"))
+            ) else
+              empty
+            end
+          )
+      ]
+    }|.isSpammyUrl=(
+        .links
+        |any(
+             (  .text as $text
+                |(
+                    (.url|startswith("http"))
+                    and (.url|startswith("https://www.quora.com")|not)
+                    and (.url|contains($text)|not)
+                )
+             )
+        )
+    )'
   }
 
   _headers-as-map() {
@@ -348,6 +1195,20 @@ _filter() {
     done
   }
 
+  _simple-activity() {
+    local bias=${1:--1}
+    jq --argjson bias "$bias" '
+      [.data.user.activityConnection.edges[].node as $node
+      |$node.feedReason
+      |select(.__isFeedReason=="UserUpvotedAnswerReason")
+      |.uid=.userNames[0].uid
+      |.timestamp|=(./1000000|round|todateiso8601)
+      |.profileUrl=.userNames[0].profileUrl
+      |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)][$bias]
+    ' \
+    | _ju select 'uid,url,text,timestamp,profileUrl'
+  }
+
   _simple-notifications() {
     jq -c '
         .data.viewer.sentNotifCollectionsConnection.edges[].node
@@ -366,53 +1227,6 @@ _filter() {
         eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
         jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
     done
-  }
-
-  # converts a full profile into a simple profile
-  _full-to-simple-profile() {
-    jq -c '{
-      "uid": .data.user.uid,
-      "profileUrl":.data.user.profileUrl,
-      "isBlockedByViewer": .data.user.isBlockedByViewer,
-      "viewerHasMuted": .data.user.viewerHasMuted,
-      "isUserBanned": .data.user.isUserBanned,
-      "followingCount": .data.user.followingCount,
-      "followerCount": .data.user.followingCount,
-      "creationTime": .data.user.creationTime,
-      "profileAge": (((((now|round) - (.data.user.creationTime/1000000))/8640)|round)/10),
-      "isSpam": false,
-      "links": [
-          .data.user.descriptionQtextDocument.legacyJson.sections[].spans[]
-          |select(.modifiers.link!=null)
-          |{"text":.text, "url":.modifiers.link.url}
-       ],
-      "space_links": [
-          .data.user.combinedProfileFeedConnection.edges[]
-          |.node.post.contentQtextDocument.legacyJson
-          |(
-            if . then (
-              fromjson
-              |.sections[]
-              |.spans[]
-              |.modifiers.embed.url
-              |select(. and startswith("https://adultdating.quora.com"))
-            ) else
-              empty
-            end
-          )
-      ]
-    }|.isSpammyUrl=(
-        .links
-        |any(
-             (  .text as $text
-                |(
-                    (.url|startswith("http"))
-                    and (.url|startswith("https://www.quora.com")|not)
-                    and (.url|contains($text)|not)
-                )
-             )
-        )
-    )'
   }
 
   _sweet-hot-girls() {
@@ -454,6 +1268,25 @@ _from() {
 
 _har() {
 
+  _bodies() {
+    jq '
+      [
+        .log.entries[].request
+        |select(.url|contains("quora.com/"))
+        |([.headers[]|.key=.name]|from_entries) as $headers
+        |$headers[":path"] as $path
+        |select($path!=null)
+        |select($path|ascii_downcase|contains("facebook")|not)
+        |select(.postData.mimeType=="application/json")
+        |(.postData.text|fromjson) as $body
+        |{
+            "key": $path,
+            "value": $body
+        }
+      ]
+      |from_entries'
+  }
+
   _credentials() {
     _raw-headers | \
     jq -c '
@@ -466,24 +1299,6 @@ _har() {
         )
       )][-1]
     '
-  }
-
-  _raw-headers() {
-    jq '
-      [
-        .log.entries[].request
-        |select(.url|contains("quora.com/"))
-        |
-          [.headers[]|.key=.name]
-          |from_entries
-          |.[":path"] as $path
-          |select($path != null) as $headers
-        |{
-            "key": $path,
-            "value": $headers
-        }
-      ]
-      |from_entries'
   }
 
   _headers() {
@@ -507,20 +1322,19 @@ _har() {
       )'
   }
 
-  _bodies() {
+  _raw-headers() {
     jq '
       [
         .log.entries[].request
         |select(.url|contains("quora.com/"))
-        |([.headers[]|.key=.name]|from_entries) as $headers
-        |$headers[":path"] as $path
-        |select($path!=null)
-        |select($path|ascii_downcase|contains("facebook")|not)
-        |select(.postData.mimeType=="application/json")
-        |(.postData.text|fromjson) as $body
+        |
+          [.headers[]|.key=.name]
+          |from_entries
+          |.[":path"] as $path
+          |select($path != null) as $headers
         |{
             "key": $path,
-            "value": $body
+            "value": $headers
         }
       ]
       |from_entries'
@@ -866,39 +1680,6 @@ _post() {
       path:"$(_explode exec path query_activity)"
   }
 
-  _shares() {
-    eval "$(jq -s '.[0]*.[1]' <(_ju o first:10 after:0) <(_ju o "$@") | _ju pipe 'select nodeId,first,after|to env')"
-    test -n "$nodeId" && test -n "$first" && test -n "$after" || die "usage: shares nodeId:{nodeId} first:{first} after:{after}"
-
-    local data="$(
-      _ju o "after:$after" "first:$first" "nodeId:$nodeId" \
-      | _explode exec --stdin body query_shares
-    )"
-
-    _curl \
-      data:"$data" \
-      headers:"$(_explode exec headers query_shares)" \
-      method:POST \
-      path:"$(_explode exec path query_shares)"
-  }
-
-  _mute() {
-    local uid=$1
-
-    test -n "$uid" || die "usage: post mute {uid}"
-
-    _curl \
-      method:POST \
-      path:"$(_explode exec path mutation_user_mute)" \
-      headers:"$(_explode exec headers mutation_user_mute)" \
-      data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_mute)" \
-      | jq -c --arg uid "$uid" '
-            {
-                "uid": $uid,
-                "viewerHasMuted": .data.userMute.user.viewerHasMuted
-            }'
-  }
-
   _block() {
     local uid=$1
 
@@ -933,6 +1714,23 @@ _post() {
 
   }
 
+  _mute() {
+    local uid=$1
+
+    test -n "$uid" || die "usage: post mute {uid}"
+
+    _curl \
+      method:POST \
+      path:"$(_explode exec path mutation_user_mute)" \
+      headers:"$(_explode exec headers mutation_user_mute)" \
+      data:"$(_ju o uid:$uid | _explode exec --stdin body mutation_user_mute)" \
+      | jq -c --arg uid "$uid" '
+            {
+                "uid": $uid,
+                "viewerHasMuted": .data.userMute.user.viewerHasMuted
+            }'
+  }
+
   _queue-post() {
     (
       HOST=profilereports.quora.com
@@ -944,6 +1742,17 @@ _post() {
         "headers:$(_explode exec headers mutation_post_add)" \
         "data:$(_explode exec --stdin body mutation_post_add)"
     ) || exit $?
+  }
+
+  _report() {
+    local name="mutation_report_add"
+    local data="$(_explode exec --stdin body "$name")"
+    _curl \
+      method:POST \
+      path:"$(_explode exec path $name)" \
+      headers:"$(_explode exec headers $name)" \
+      data:"$data" \
+      | jq -c '{"isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer}'
   }
 
   _report-legacy() {
@@ -965,15 +1774,20 @@ _post() {
       }'
   }
 
-  _report() {
-    local name="mutation_report_add"
-    local data="$(_explode exec --stdin body "$name")"
+  _shares() {
+    eval "$(jq -s '.[0]*.[1]' <(_ju o first:10 after:0) <(_ju o "$@") | _ju pipe 'select nodeId,first,after|to env')"
+    test -n "$nodeId" && test -n "$first" && test -n "$after" || die "usage: shares nodeId:{nodeId} first:{first} after:{after}"
+
+    local data="$(
+      _ju o "after:$after" "first:$first" "nodeId:$nodeId" \
+      | _explode exec --stdin body query_shares
+    )"
+
     _curl \
-      method:POST \
-      path:"$(_explode exec path $name)" \
-      headers:"$(_explode exec headers $name)" \
       data:"$data" \
-      | jq -c '{"isBlockedByViewer": .data.reportAdd.reportable.isBlockedByViewer}'
+      headers:"$(_explode exec headers query_shares)" \
+      method:POST \
+      path:"$(_explode exec path query_shares)"
   }
 
   dispatch "$@"
@@ -1182,22 +1996,6 @@ _query() {
   dispatch "$@"
 }
 
-_require() {
-  _dotfiles() {
-    if ! test -d "${QUORA_DOTFILES}"; then
-      mkdir -p "${QUORA_DOTFILES}"
-      chmod 2700 "${QUORA_DOTFILES}"
-    fi
-    if ! test -f "${QUORA_DOTFILES}/config"; then
-      echo '{
-        "enable-submit": false
-      }' > "${QUORA_DOTFILES}/config"
-    fi
-  }
-
-  dispatch "$@"
-}
-
 _report() {
   _sweet-hot-girls() {
     _filter activity-summary \
@@ -1250,822 +2048,33 @@ _report() {
  jq -c 'select(.isSpam)' | dispatch "$@"
 }
 
+_require() {
+  _dotfiles() {
+    if ! test -d "${QUORA_DOTFILES}"; then
+      mkdir -p "${QUORA_DOTFILES}"
+      chmod 2700 "${QUORA_DOTFILES}"
+    fi
+    if ! test -f "${QUORA_DOTFILES}/config"; then
+      echo '{
+        "enable-submit": false
+      }' > "${QUORA_DOTFILES}/config"
+    fi
+  }
+
+  dispatch "$@"
+}
+
 _shell() {
   export PS1="\h:\W \u (qs)\$ "
   ${SHELL:-bash}
 }
 
-_explodeable() {
-
-  _requires() {
-    echo '{"path":[],"body":[],"headers":[]}'
-  }
-
-  _body() {
-    echo "empty"
-  }
-
-  _host() {
-    jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
-  }
-
-  _path() {
-    echo '""'
-  }
-
-  _headers() {
-    echo "{}"
-  }
-
-  _templates() {
-    _accept() {
-      _headers() {
-        jq -nc '{
-          "accept": "*/*",
-          "accept-encoding": "gzip, deflate, br",
-          "accept-language": "en-AU,en;q=0.9,en-US;q=0.8"
-        }'
-      }
-      dispatch "$@"
-    }
-
-    _sec_ch_ua() {
-      _headers() {
-        jq -nc '{
-          "sec-ch-ua": "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\"",
-          "sec-ch-ua-mobile": "?0",
-          "sec-ch-ua-platform": "\"macOS\"",
-        }'
-      }
-      dispatch "$@"
-    }
-
-    _origin() {
-      _headers() {
-        jq -nc --arg host "${HOST:-www.quora.com}" '{"origin": "https://\($host)"}'
-      }
-      dispatch "$@"
-    }
-
-    _origin_profile_reports() {
-      _headers() {
-        echo '{"origin": "https://profilereports.quora.com"}'
-      }
-      dispatch "$@"
-    }
-
-    _content_type_json() {
-      _headers() {
-        echo '{"content-type": "application/json"}'
-      }
-      dispatch "$@"
-    }
-
-    _cache_control_max_age_0() {
-      echo '{"cache-control": "max-age=0"}'
-    }
-
-    _sec_fetch_document_navigate_same_origin() {
-      echo '
-        {
-          "sec-fetch-dest": "document",
-          "sec-fetch-mode": "navigate",
-          "sec-fetch-site": "same-origin"
-        }
-      '
-    }
-
-    _sec_fetch_empty_cors_same_origin() {
-      _headers() {
-        jq -nc '{
-          "sec-fetch-dest": "empty",
-          "sec-fetch-mode": "cors",
-          "sec-fetch-site": "same-origin",
-          "sec-fetch-user": "?1",
-        }'
-      }
-      dispatch "$@"
-    }
-
-    _upgrade_insecure_requests() {
-      _headers() {
-        echo '{"upgrade-insecure-requests": "1"}'
-      }
-
-      dispatch "$@"
-    }
-
-    _user_agent() {
-      _headers() {
-        echo '{"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"}'
-      }
-      dispatch "$@"
-    }
-
-    _lib() {
-      _requires() {
-        jq -nc '{
-          "headers": [
-            "accept",
-            "cache_control_max_age_0",
-            "content_type_json",
-            "origin",
-            "origin_profile_reports",
-            "sec_ch_ua",
-            "sec_fetch_document_navigate_same_origin",
-            "sec_fetch_empty_cors_same_origin",
-            "upgrade_insecure_requests",
-            "user_agent"
-          ]
-        }'
-      }
-
-      _headers() {
-        echo '
-          .;
-          def quora(ch;w;s;r):
-            {
-              "quora-broadcast-id": (ch+"-"+w+"-"+s),
-              "quora-canary-revision": "false",
-              "quora-revision": r,
-              "quora-window-id": w
-            }
-        '
-      }
-
-      dispatch "$@"
-    }
-
-    _mutation_notification_markAsRead() {
-      _body() {
-        echo '{
-          "queryName":"NotifItem_markSentNotifCollectionAsRead_Mutation",
-          "extensions":{
-            "hash":"9eda4e6d8e46ff1d241f1d4af22bfe664152265aa9693e57d67b9721a32d11bf"
-          },
-          "variables":{
-            "sncid":.sncid,
-            "source":"notif_page",
-            "shouldLogClick":true
-          }
-        }'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan49-8888";"react_pxemluvapjrirdhr";"UQaz";"b9c9c3eca0656a91bd2c1aa588dcc28495fe1684")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=NotifItem_markSentNotifCollectionAsRead_Mutation"'
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    _mutation_post_add_legacy() {
-
-      _body() {
-        echo '
-          {
-            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
-            "extensions": {
-              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
-            },
-            "variables": {
-              "tribeId": (.tribeId//2841204),
-              "title": {
-                "sections": [
-                  {
-                    "type": "plain",
-                    "spans": [
-                      {
-                        "text": .title,
-                        "modifiers": {}
-                      }
-                    ],
-                    "indent": 0,
-                    "is_rtl": false,
-                    "quoted": false
-                  }
-                ]
-              }|tojson,
-              "content": (profile_report_contents|tojson),
-              "shouldQueue": (.shouldQueue//true),
-              "accessOption": null,
-              "credentialId": null
-            }
-          }
-        '
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin_profile_reports
-          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _host() {
-        echo '"profilereports.quora.com"'
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
-      }
-
-      _requires() {
-        _ju o 'body:["profile_report_contents"]' 'headers:["lib"]'
-      }
-
-      dispatch "$@"
-    }
-
-    _mutation_post_add() {
-
-      _host() {
-        jq -nc --arg host "${HOST:-profilereports.quora.com}" '$host'
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=UniversalComposerModalWrapper_postAdd_Mutation"'
-      }
-
-      _body() {
-        echo '
-          {
-            "queryName": "UniversalComposerModalWrapper_postAdd_Mutation",
-            "extensions": {
-              "hash": "7d9cf9a9e5bb12d37a02fe1ec7cd983198467d2c75ec61e304024f1ce4f6840b"
-            },
-            "variables": {
-              "tribeId": (.tribeId//2841204),
-              "title": (.title|tojson),
-              "content": (.content|tojson),
-              "shouldQueue": (.shouldQueue//true),
-              "accessOption": null,
-              "credentialId": null
-            }
-          }
-        '
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan49-8888";"react_eutcerodozlwcvvu";"6tZm";"da20f600855d7b1c67fff91a8befd1ef700fbe96")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _requires() {
-        _ju o 'headers:["lib"]'
-      }
-
-      dispatch "$@"
-    }
-
-    # /graphql/gql_POST?q=UserMute_userMute_Mutation
-    _mutation_user_mute() {
-      _body() {
-        echo '{
-          "queryName": "UserMute_userMute_Mutation",
-          "extensions": {
-            "hash": "c8f2533d8e1ad8fbdf8a33f9bc4ac45498c7363d04320722909a36a343b82cf8"
-          },
-          "variables": {
-            "uid": .uid
-          }
-        }'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("ain-w-chan50-8888";"react_kudnreowtdanpzoc";"Gj7m";"906b08c33432ec92a44754fc91a61a035a43a5e0")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-        :
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=UserMute_userMute_Mutation"'
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    #/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation
-    _mutation_user_block() {
-      _body() {
-        echo '{
-          "queryName": "userBlockModalInnerUtils_userSetBlock_Mutation",
-          "extensions": {
-            "hash": "fc7232c06fc858107eba5ff2469a96639fc5834eb503cb2d1db2793e89770527"
-          },
-          "variables": {
-            "targetUid": .uid,
-            "shouldBlock": (.shouldBlock//true)
-          }
-        }'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan52-8888";"react_rprdkoatidvglkuq";"kvXJ";"e5a157d98f80bfc3ee6d4b7638a56c30fa3bacc4")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-        :
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=userBlockModalInnerUtils_userSetBlock_Mutation"'
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-      dispatch "$@"
-    }
-
-    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
-    _mutation_report_add_legacy() {
-      _body() {
-        echo '{
-          "queryName": "ReportModalInner_reportAdd_Mutation",
-          "extensions": {
-            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
-          },
-          "variables": {
-            "reason": "spam",
-            "targetType": "user",
-            "reportableId": .uid,
-            "comment": {
-              "sections": [
-                {
-                  "type": "plain",
-                  "indent": 0,
-                  "quoted": false,
-                  "is_rtl": false,
-                  "spans": [
-                    {
-                      "modifiers": {},
-                      "text": .message
-                    }
-                  ]
-                }
-              ],
-              "caret": {
-                "start": {
-                  "spanIdx": 0,
-                  "sectionIdx": 0,
-                  "offset": 59
-                },
-                "end": {
-                  "spanIdx": 0,
-                  "sectionIdx": 0,
-                  "offset": 59
-                }
-              }
-            }
-          }
-        }|.variables.comment|=tojson'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-
-    }
-
-    #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
-    _mutation_report_add() {
-      _body() {
-        echo '{
-          "queryName": "ReportModalInner_reportAdd_Mutation",
-          "extensions": {
-            "hash": "1bf4debbc6131b3aff1ccd9ecf80b819330de1d1c789ced91eece410a68ba9a4"
-          },
-          "variables": {
-            "reason": "spam",
-            "targetType": "user",
-            "reportableId": .uid,
-            "comment": (
-              {
-                "activity": .activity_summary,
-                "others": .others
-              }
-              |profile_report_contents),
-          }
-        }|.variables.comment|=tojson'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan49-8888";"eact_wkdwbuxkvtsoehvq";"Z01a";"2c343221d5d11fd67f13b8ca8a09586831ccaba8")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation"'
-      }
-
-      _requires() {
-        echo '{"body":["profile_report_contents"],"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-
-    }
-
-    _profile() {
-      _path() {
-        echo '"/profile/"+(.profileUrl|@uri)'
-      }
-
-      _headers() {
-        echo '
-          accept
-          *cache_control_max_age_0
-          *sec_ch_ua
-          *sec_fetch_document_navigate_same_origin
-          *upgrade_insecure_requests
-          *user_agent
-        '
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    _profile_report_contents() {
-      _body() {
-        echo '
-          .activity as $activity
-          |.others as $others
-          |{
-            "sections": [
-              {
-                "type": "plain",
-                "indent": 0,
-                "quoted": false,
-                "is_rtl": false,
-                "spans": [
-                  {
-                    "modifiers": {},
-                    "text": "This "
-                  },
-                  {
-                    "modifiers": {
-                      "link": {
-                        "type": "url",
-                        "url": "https://www.quora.com\($activity.profileUrl)"
-                      }
-                    },
-                    "text": "profile"
-                  },
-                  {
-                    "modifiers": {},
-                    "text": " generated up to \($activity.upvotes.count) upvotes at a rate of up to \($activity.upvotes.rate_per_hour) upvotes per hour. For example:"
-                  }
-                ]
-              },
-              {
-                "type": "unordered-list",
-                "indent": 0,
-                "quoted": false,
-                "is_rtl": false,
-                "spans": [
-                  {
-                    "modifiers": {
-                      "link": {
-                        "type": "url",
-                        "url": "https://www.quora.com\($activity.upvotes.first.url)"
-                      }
-                    },
-                    "text": "\($activity.upvotes.first.timestamp) - #1"
-                  }
-                ]
-              },
-              {
-                "type": "unordered-list",
-                "indent": 0,
-                "quoted": false,
-                "is_rtl": false,
-                "spans": [
-                  {
-                    "modifiers": {
-                      "link": {
-                        "type": "url",
-                        "url": "https://www.quora.com\($activity.upvotes.last.url)"
-                      }
-                    },
-                    "text": "\($activity.upvotes.last.timestamp) - #\($activity.upvotes.count|tostring)"
-                  }
-                ]
-              },
-              {
-                "type": "plain",
-                "indent": 0,
-                "quoted": false,
-                "is_rtl": false,
-                "spans": [
-                  {
-                    "modifiers": {},
-                    "text": "In addition to this user, there at least \($others|length) other similar users currently active, a sample of which are listed below..."
-                  }
-                ]
-              },
-              ($others|map({
-                "type": "unordered-list",
-                "indent": 0,
-                "quoted": false,
-                "is_rtl": false,
-                "spans": [
-                  {
-                    "modifiers": {
-                      "link": {
-                        "type": "url",
-                        "url": ("https://www.quora.com"+.)
-                      }
-                    },
-                    "text": (.|sub("/profile/";"")),
-                  },
-                  {
-                    "modifiers": {},
-                    "text": "\n"
-                  }
-                ]
-                }))
-              ]|flatten,
-            "caret": {
-              "start": {
-                "spanIdx": 0,
-                "sectionIdx": 0,
-                "offset": 12
-              },
-              "end": {
-                "spanIdx": 0,
-                "sectionIdx": 0,
-                "offset": 12
-              }
-            }
-          }
-        '
-      }
-
-      dispatch "$@"
-
-    }
-
-    # "/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"
-    _query_activity() {
-      _body() {
-        echo '
-          {
-            "queryName": "UserProfileActivity_feedStories_Query",
-            "extensions": {
-              "hash": "b3ec746645150c155aa601c727d305812f83ee56365bed740487ff58358c3814"
-            },
-            "variables": {
-              "uid": .uid,
-              "first": .first,
-              "after": (.after|tostring)
-            }
-          }
-        '
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan50-8888";"react_gvkeyzfhoyeeovpl";"bvTC";"6f83bc46e0b270f21d00421c8be3cf5d978036f3")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/graphql/gql_para_POST?q=UserProfileActivity_feedStories_Query"'
-      }
-
-      _requires() {
-        echo '{"headers": ["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    _query_shares() {
-
-      _host() {
-        jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
-      }
-
-      _body() {
-        echo '
-          {
-            "queryName": "SharePostsPagedListQuery",
-            "extensions": {
-              "hash": "ad3fdfef026be57dc1f334e6c00638d4ed7b7037149990a3ffb33b0c37d4cd3c"
-            },
-            "variables": {
-              "nodeId": .nodeId,
-              "first": .first,
-              "after": (.after|tostring)
-            }
-          }
-        '
-      }
-
-      _headers() {
-        echo '
-          accept
-          *content_type_json
-          *origin
-          *quora("main-w-chan49-8888";"react_klvmidphlajzcwqe";"FdjV";"f4c2c2ff6b34f3f0dcd5d8a71b45003d84e1633d")
-          *sec_ch_ua
-          *sec_fetch_empty_cors_same_origin
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/graphql/gql_para_POST?q=SharePostsPagedListQuery"'
-      }
-
-      _requires() {
-        echo '{"headers": ["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    _upvotes() {
-      _headers() {
-        echo '
-          accept
-          *cache_control_max_age_0
-          *sec_ch_ua
-          *sec_fetch_document_navigate_same_origin
-          *upgrade_insecure_requests
-          *user_agent
-        '
-      }
-
-      _path() {
-        echo '"/notifications/upvotes"'
-      }
-
-      _requires() {
-        echo '{"headers":["lib"]}'
-      }
-
-      dispatch "$@"
-    }
-
-    dispatch "$@"
-  }
-
-  local template=$1
-  local part=$2
-
-  dispatch templates "$template" "$part"
-}
-
-# explodes template
-_explode() {
-  EXPLODEABLE=${EXPLODEABLE:-_explodeable}
-
-  _exec() {
-    local use_stdin=false
-    if test "$1" = "--stdin"; then
-      use_stdin=true
-      shift 1
-    fi
-    local template=$(dispatch part "$@")
-    if $use_stdin; then
-      jq -c "$template"
-    else
-      jq -nc "$template"
-    fi
-  }
-
-  _part() {
-    local part=$1
-    local template=$2
-
-    for r in $(_explode requires "$part" "$template" | tsort); do
-      echo "def $r:"
-      ${EXPLODEABLE} "$r" "$part" | sed "s/^/  /"
-      echo ";"
-    done | _filter jqc
-    echo $template
-  }
-
-  _requires() {
-    local part=$1
-    local template=$2
-    local dependency
-
-    ($EXPLODEABLE "$template" requires) \
-    | jq -r --arg part "$part" '(.[$part]//[])|.[]' \
-    | tr ' ' \\012 \
-    | while read dependency; do
-      (_explode requires "$part" "$dependency" )
-      echo "$dependency" "$template"
-    done
-    echo "$template" "$template"
-  }
-
-  cmd=$1
-  case "$cmd" in
-    exec|requires|part)
-      :
-    ;;
-    *)
-      set -- part "$@"
-    ;;
-  esac
-
-  dispatch "$@"
-}
-
-__to() {
-  _curl-args() {
-    jq -r '
-      if type=="object" then
-        to_entries[]|"-H\t"+.key+": "+.value
-      elif type=="array" then
-        .|join("\t")
-      else
-        .
-      end' | tr \\012 \\011 | sed "s/.\$//"
-  }
-  dispatch "$@"
+_submit-credentials() {
+  if test -f "${QUORA_DOTFILES}/submit-credentials"; then
+    cat "${QUORA_DOTFILES}/submit-credentials"
+  else
+    _credentials
+  fi
 }
 
 _to() {
