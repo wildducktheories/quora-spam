@@ -947,11 +947,17 @@ _post() {
   }
 
   _report-legacy() {
-    local data=$(jq -s '.[0]*.[1]' <(_ju o message:"Spammy link in profile.") <(_ju o "$@")  | _explode exec --stdin body mutation_report_add)
+    local name="mutation_report_add_legacy"
+    local data=$(
+      jq -s '.[0]*.[1]' \
+        <(_ju o message:"Spammy link in profile.") \
+        <(_ju o "$@") \
+        | _explode exec --stdin body "$name"
+      )
     _curl \
       method:POST \
-      path:"$(_explode exec path mutation_report_add)" \
-      headers:"$(_explode exec headers mutation_report_add)" \
+      path:"$(_explode exec path $name)" \
+      headers:"$(_explode exec headers $name)" \
       data:"$data" \
       | jq -c --arg uid "$uid" '{
            "uid": $uid,
@@ -1604,7 +1610,7 @@ _explodeable() {
     }
 
     #/graphql/gql_POST?q=ReportModalInner_reportAdd_Mutation
-    _mutation_report_add() {
+    _mutation_report_add_legacy() {
       _body() {
         echo '{
           "queryName": "ReportModalInner_reportAdd_Mutation",
