@@ -2000,6 +2000,7 @@ _report() {
   _sweet-hot-girls() {
     _filter activity-summary \
     |_filter others sweet-hot-girls \
+    |jq -c 'select(if (.activity_summary.upvotes.count//0)>0 then . else .debug="count == 0"|debug|empty end)' \
     | while read -r profile; do
       (
         eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
