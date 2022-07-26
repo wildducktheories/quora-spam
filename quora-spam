@@ -843,7 +843,7 @@ _explodeable() {
           {
             "queryName": "UserProfileActivity_feedStories_Query",
             "extensions": {
-              "hash": "b3ec746645150c155aa601c727d305812f83ee56365bed740487ff58358c3814"
+              "hash": "52115adc03eb7b0e25ae4b37d57e4d561e3696e3dc3ca7ca589e5687f0e726d6"
             },
             "variables": {
               "uid": .uid,
@@ -859,7 +859,7 @@ _explodeable() {
           accept
           *content_type_json
           *origin
-          *quora("main-w-chan50-8888";"react_gvkeyzfhoyeeovpl";"bvTC";"6f83bc46e0b270f21d00421c8be3cf5d978036f3")
+          *quora("main-w-chan49-8888";"react_duzlzjcusriokqwo";"47jc";"e4349c3c1e894e9371921272ed4c7b9473bf3e6e")
           *sec_ch_ua
           *sec_fetch_empty_cors_same_origin
           *user_agent
