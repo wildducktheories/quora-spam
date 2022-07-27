@@ -1158,12 +1158,23 @@ _filter() {
   }
 
   _html() {
-    grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
-    | tail -1 \
-    | sed "s/;\$//" \
-    | sed "s/^[^=]*= //" \
-    | sed "s/};<\/script>.*/}/" \
-    | jq -r .
+    local HTML_VERSION=${1:-${HTML_VERSION:-2}}
+    case $HTML_VERSION in
+      1)
+        grep "window.ansFrontendGlobals.data.inlineQueryResults.results" \
+        | tail -1 \
+        | sed "s/;\$//" \
+        | sed "s/^[^=]*= //" \
+        | sed "s/};<\/script>.*/}/" \
+        | jq -r .
+      ;;
+      2|*)
+        sed -n "s/.*window.ansFrontendGlobals.data.inlineQueryResults.results.*push(//;s/);window.*//p" \
+        | tail -1 \
+        | jq -r . \
+        | jq .
+      ;;
+    esac
   }
 
   _jqc() {
