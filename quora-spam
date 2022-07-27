@@ -1162,6 +1162,7 @@ _filter() {
     | tail -1 \
     | sed "s/;\$//" \
     | sed "s/^[^=]*= //" \
+    | sed "s/};<\/script>.*/}/" \
     | jq -r .
   }
 
@@ -2093,7 +2094,7 @@ _version() {
   echo "${QUORA_SPAM_VERSION}"
 }
 
-die "Quora has changed their HTML format - a fix is pending"
+#die "Quora has changed their HTML format - a fix is pending"
 
 _credentials >/dev/null
 
