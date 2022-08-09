@@ -2162,31 +2162,40 @@ _query() {
 }
 
 _report() {
-  _sweet-hot-girls() {
-    _filter activity-summary \
-    |_filter others sweet-hot-girls \
+  __with-others() {
+    local others=$1
+    local count=0
+
+    test -n "$others" || die "report: _with-others: usage: ... {query}"
+    _filter others "$others" \
     |jq -c 'select(if (.activity_summary.upvotes.count//0)>0 then . else .debug="count == 0"|debug|empty end)' \
     | while read -r profile; do
-      (
-        eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
-        if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
-          continue
+        let count=count+1
+        if test $count -eq 1; then
+          report_bust=true
+        else
+          report_bust=false
         fi
-        if test "$isRead" = "false"; then
-          _post markAsRead "$sncid" >/dev/null
-        fi
-        if test "$isBlockedByViewer" = "false"; then
-          echo "$profile" | _post report >/dev/null
-          _file-profile-report "$profileUrl" >/dev/null
-        fi
-        if test "$viewerHasMuted" = "false"; then
-          _post mute "$uid" >/dev/null
-        fi
-        CACHE_BUST=true _query simple-profile $profileUrl | jq -c --argjson profile "$profile" '$profile*(.|del(.isSpam))'
-      )
-      sleep 5;
+        (
+          eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
+          if test "$isBlockedByViewer+$viewerHasMuted+$isRead" = "true+true+true"; then
+            continue
+          fi
+          if test "$isRead" = "false"; then
+            _post markAsRead "$sncid" >/dev/null
+          fi
+          if test "$isBlockedByViewer" = "false"; then
+            echo "$profile" | _post report >/dev/null
+            CACHE_BUST=$report_bust _file-profile-report "$profileUrl" "$others" >/dev/null
+          fi
+          if test "$viewerHasMuted" = "false"; then
+            _post mute "$uid" >/dev/null
+          fi
+          CACHE_BUST=true _query simple-profile $profileUrl | jq -c --argjson profile "$profile" '$profile*(.|del(.isSpam))'
+        )
+        sleep 5;
     done
- }
+  }
 
  _adult-dating() {
     while read -r profile; do
@@ -2210,6 +2219,10 @@ _report() {
       sleep 5;
     done
  }
+  _sweet-hot-girls() {
+    _filter activity-summary \
+    | __with-others sweet-hot-girls
+  }
 
  jq -c 'select(.isSpam)' | dispatch "$@"
 }
