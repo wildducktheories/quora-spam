@@ -1087,6 +1087,7 @@ __to() {
 
 _file-profile-report() {
   local profile=${1#/profile/}
+  local others=${2:-sweet-hot-girls}
 
   local is_enabled=$(_config get enable-submit)
 
@@ -1096,7 +1097,7 @@ _file-profile-report() {
 
     title="profile: ($profile, $uid)"
     activity="$(quora-spam query activity-summary $uid)"
-    others="$(quora-spam query sweet-hot-girls \
+    others="$(CACHE_BUST=${CACHE_BUST:-true} _cache exec quora-spam query $others \
           | jq \
               -sc \
               --arg 'profile' "$profile" \
