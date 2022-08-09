@@ -1999,7 +1999,7 @@ _query() {
   }
 
   _one-post-poseurs() {
-    _busy-profiles | _filter edits | jq -c 'select(.edits.analysis.weight >= 8)|.isSpam=true'
+    _busy-profiles | _filter edits | jq -c --argjson one_post_poseurs_weight "${ONE_POST_POSEUR_WEIGHT:-7}" 'select(.edits.analysis.weight >= $one_post_poseurs_weight)|.isSpam=true'
   }
 
   _simple-space-page() {
