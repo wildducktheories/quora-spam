@@ -1770,6 +1770,23 @@ _post() {
             }'
   }
 
+  _edits() {
+    eval "$(jq -s '.[0]*.[1]' <(_ju o ) <(_ju o "$@") | _ju pipe 'select uid|to env')"
+    test -n "$uid" || die "usage: edits uid:{uid}"
+
+    local data="$(
+      _ju o "uid:$uid" \
+      | _explode exec --stdin body query_edits
+    )"
+
+    _curl \
+      data:"$data" \
+      headers:"$(_explode exec headers query_edits)" \
+      method:POST \
+      path:"$(_explode exec path query_edits)"
+  }
+
+
   _markAsRead() {
     local sncid="$1"
 
