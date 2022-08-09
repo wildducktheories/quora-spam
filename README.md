@@ -228,48 +228,52 @@ However, if you cannot verify the `quora-spam` script is not malicious then you 
 In order to mitigate the risk of leaving Quora credentials sitting on your harddrive, the credentials, including credentials and .har file saved with `quora-spam har save` are deleted each time a `quora-spam login` shell is closed. If you save the .har file you capture from the browser prior to calling `quora-spam har save` then you ensure that this file is stored in a secure place or delete it after use.
 
 # RELEASE NOTES
-- 2002-07-28 - v1.10
+- 2022-08-09 - v1.11
+	+ add support for one-post-poseurs
+	+ add support for extracting edits
+
+- 2022-07-28 - v1.10
 	+ reorganise order of function in source file
 	+ update header identifiers in UserProfileActivity_feedStories_Query request
 	+ avoid reporting when activity-summary fails to produce output
 	+ redo HTML parser to cope with changes in Quora HTML layouts
 
-- 2002-07-22 - v1.9
+- 2022-07-22 - v1.9
 	+ add activity-summary filter to augement a simple profile with activity data
 	+ add others filter to augment a simple profile with a list of similar profiles
 	+ refine 'report sweet-hot-girls' to include more detailed report
 
-- 2002-07-21 - v1.8
+- 2022-07-21 - v1.8
 	+ miscellaneous regression errors
 
-- 2002-07-20 - v1.7
+- 2022-07-20 - v1.7
 	+ enhance query simple-profile output
 	+ invalidate cache after mutation
 	+ split out 'query explode-adult-dating'
 	+ change 'process explode-adult-dating' to block the matched profiles
 	+ add 'query young-profiles' and 'query busy-profiles'
 
-- 2002-07-18 - v1.6
+- 2022-07-18 - v1.6
 	+ add support for 'adult-dating' alternative to 'sweet-hot-girls' to deal with a new variant of the spam in which profiles don't have spammy links but link instead to a post that contains spammy links
 	+ added caching support to avoid repeated executions of same curl request
 	+ add explode-adult-dating to generate a upvote activity summary for all sharers of a spammy post. warning: this command is expensive in terms of curl requests, network, CPU and disk
 
-- 2002-07-16 - v1.5
+- 2022-07-16 - v1.5
 	+ replaced 'template' with 'explode' and 'explodeable'
 	+ reworked all curl calls to use 'explode'
 	+ whitespace fixes
 
-- 2002-07-15 - v1.4
+- 2022-07-15 - v1.4
 	+ adjusted spam filter to deal with emerging variants
 	+ cope with non-ASCII characters in profile URLs
 
-- 2002-07-14 - v1.3
+- 2022-07-14 - v1.3
 	+ versions prior to v1.2 had a hard-coded (and sensitive) quora-formkey header which prevented the software working for anyone but me
 	+ this key has now been invalidated, to prevent mis-use.
 	+ the git history prior to v1.3 has been rewritten to replace the sensitve value with rubbish
 	+ updated the filter to include additional spam detection expressions
 
-- 2002-07-13 - v1.2
+- 2022-07-13 - v1.2
 	+ add support for generating an activity summary for a profile
 	+ add support for submitting profile reports to profilereports.quora.com
 	+ replace 'cookies' file with 'credentials' file which includes quora-formkey header

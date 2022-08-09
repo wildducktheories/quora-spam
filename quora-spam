@@ -2,7 +2,7 @@
 
 set -o pipefail
 
-export QUORA_SPAM_VERSION=v1.11-pre
+export QUORA_SPAM_VERSION=v1.11
 export QUORA_DOTFILES=${QUORA_DOTFILES:-~/.quora-spam}
 
 die() {
