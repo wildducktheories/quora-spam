@@ -297,6 +297,13 @@ _explodeable() {
       echo '{"cache-control": "max-age=0"}'
     }
 
+    _cache_control_nocache() {
+      jq -nc '{
+        "cache-control": "no-cache",
+        "pragma": "no-cache"
+      }'
+    }
+
     _content_type_json() {
       _headers() {
         echo '{"content-type": "application/json"}'
@@ -310,6 +317,7 @@ _explodeable() {
           "headers": [
             "accept",
             "cache_control_max_age_0",
+            "cache_control_nocache",
             "content_type_json",
             "origin",
             "origin_profile_reports",
