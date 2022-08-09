@@ -2028,6 +2028,10 @@ _query() {
         )'
   }
 
+  _self() {
+    _profile | _filter full-to-simple-profile
+  }
+
   _simple-notifications() {
     _upvotes | _filter simple-notifications
   }
@@ -2035,10 +2039,6 @@ _query() {
   _simple-profile()  {
     local profile=${1#/profile/}
     _cache exec _profile "$profile" | _filter full-to-simple-profile
-  }
-
-  _self() {
-    _profile | _filter full-to-simple-profile
   }
 
   _simple-profiles() {
