@@ -885,6 +885,59 @@ _explodeable() {
       dispatch "$@"
     }
 
+    _query_edits() {
+      _body() {
+        echo '
+          {
+              "queryName": "UserProfilePageTabs_userQuery",
+              "variables": {
+                "uid": .uid,
+                "Combined": false,
+                "Answers": false,
+                "Questions": false,
+                "Posts": false,
+                "Followers": false,
+                "Following": false,
+                "KnowsAbout": false,
+                "Edits": true,
+                "Activity": false,
+                "Published": false
+              },
+              "extensions": {
+                "hash": "ed3d4de76054c38399574fd86cf737c4520b3682b720bccc26a9b88027e779cd"
+              }
+          }
+        '
+      }
+
+      _headers() {
+        echo '
+          accept
+          *cache_control_nocache
+          *content_type_json
+          *origin
+          *quora("main-w-chan49-8888";"react_reisouqijciesvwk";"SuJE";"11e8c572e332ae371c8176d5d20cb9265141bebe")
+          *sec_ch_ua
+          *sec_fetch_empty_cors_same_origin
+          *user_agent
+        '
+      }
+
+      _host() {
+        jq -nc --arg "host" "${HOST:-www.quora.com}" '$host'
+      }
+
+      _path() {
+        echo '"/graphql/gql_para_POST?q=UserProfilePageTabs_userQuery"'
+      }
+
+      _requires() {
+        echo '{"headers": ["lib"]}'
+      }
+
+      dispatch "$@"
+    }
+
     _query_shares() {
 
       _body() {
