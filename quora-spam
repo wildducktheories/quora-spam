@@ -2049,6 +2049,81 @@ _query() {
     _profile | _filter full-to-simple-profile
   }
 
+  _simple-edits() {
+    _cache exec _post edits "$@" \
+    | jq -c '
+      {
+        "sex": 3,
+        "nudes": 3,
+        "bit.ly": 1,
+        "want": 1,
+        "here": 1,
+        "http": 1,
+        "bit": 1,
+        "ly": 1,
+        "pm": 2,
+        "deceptive-link": 2,
+        "hot-link": 2
+      }
+      as $weights
+      |(.data.user.logConnection.edges[0].node.post
+      |(if .content then .content|=fromjson else . end)
+      |(if .content then
+        [
+          .content.sections[].spans[].text
+          |split(" ")[]
+          |split("/")[]
+          |sub("[:,]";"")
+          |ascii_downcase
+          |if .=="" then empty else . end
+        ]+[
+            .content.sections[].spans[]
+            |select(.modifiers.link.type=="url")
+            |.text
+            as $text
+            |if
+              ($text|startswith("http"))
+              and (.modifiers.link.url|startswith($text)|not)
+            then
+              "deceptive-link"
+            else
+              empty
+            end
+        ]+[
+            .content.sections[].spans[]
+            |select(.modifiers.link.type=="url")
+            |.text
+            as $text
+            |if
+              ($text|startswith("http://hot"))
+            then
+              "hot-link"
+            else
+              empty
+            end
+        ]
+      else
+        [
+          .url//""
+          |split("-")[]
+          |split("/")[]
+          |ascii_downcase
+        ]
+      end)
+      |flatten)
+      as $words
+
+      |(reduce
+          $words[]
+          as $word
+          (0; .+$weights[$word]//0)
+        )
+      as $weight
+
+      |.analysis={"weight": $weight, "words": $words}
+    '
+  }
+
   _simple-notifications() {
     _upvotes | _filter simple-notifications
   }
