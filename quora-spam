@@ -1998,6 +1998,10 @@ _query() {
     )
   }
 
+  _one-post-poseurs() {
+    _busy-profiles | _filter edits | jq -c 'select(.edits.analysis.weight >= 8)|.isSpam=true'
+  }
+
   _simple-space-page() {
     local url=$1
 
@@ -2233,6 +2237,11 @@ _report() {
       sleep 5;
     done
   }
+
+  _one-post-poseurs() {
+    __with-others one-post-poseurs
+  }
+
   _sweet-hot-girls() {
     _filter activity-summary \
     | __with-others sweet-hot-girls
