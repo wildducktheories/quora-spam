@@ -2197,7 +2197,7 @@ _report() {
     done
   }
 
- _adult-dating() {
+  _adult-dating() {
     while read -r profile; do
       (
         eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,viewerHasMuted,isRead,sncid,profileUrl|to env')"
@@ -2218,13 +2218,13 @@ _report() {
       ) | jq -cs "select(.[0] != null)|.[0]*(.[1]//{})*(.[2]//{})*(.[3]//{})"
       sleep 5;
     done
- }
+  }
   _sweet-hot-girls() {
     _filter activity-summary \
     | __with-others sweet-hot-girls
   }
 
- jq -c 'select(.isSpam)' | dispatch "$@"
+  jq -c 'select(.isSpam)' | dispatch "$@"
 }
 
 _require() {
