@@ -1146,6 +1146,19 @@ _filter() {
       'select(.activity_summary.upvotes.rate_per_hour>$limit)|.isBusy=true' \
     || die "busy-profiles: failed"
   }
+
+  _edits() {
+    while read -r profile; do
+      local uid edits;
+      eval "$(echo "$profile" | _ju pipe 'select uid,edits|to env')"
+      if test -n "$edits"; then
+        echo "$profile"
+      else
+        _query simple-edits "uid:$uid" | jq -sc "$profile*(.[0]|{\"edits\": .})" || die "filter: edits: failed"
+      fi
+    done
+  }
+
   # converts a full profile into a simple profile
   _full-to-simple-profile() {
     jq -c '{
