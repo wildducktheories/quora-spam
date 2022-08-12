@@ -1999,7 +1999,12 @@ _query() {
   }
 
   _one-post-poseurs() {
-    _busy-profiles | _filter edits | jq -c --argjson one_post_poseurs_weight "${ONE_POST_POSEUR_WEIGHT:-7}" 'select(.edits.analysis.weight >= $one_post_poseurs_weight)|.isSpam=true'
+    _busy-profiles \
+    | _filter edits \
+    | jq -c \
+      --argjson one_post_poseurs_weight "${ONE_POST_POSEUR_WEIGHT:-15}" \
+      'select(.edits.analysis.weight >= $one_post_poseurs_weight)
+      |.isSpam=true'
   }
 
   _simple-space-page() {
@@ -2071,17 +2076,38 @@ _query() {
     _cache exec _post edits "$@" \
     | jq -c '
       {
-        "sex": 3,
-        "nudes": 3,
+        "bit": 1,
         "bit.ly": 1,
-        "want": 1,
+        "find": 1,
+        "fr!e": 4,
+        "h!r!": 4,
+        "h!r!": 4,
+        "h!re": 4,
         "here": 1,
         "http": 1,
-        "bit": 1,
+        "i": 1,
+        "i'\''m":1,
         "ly": 1,
+        "me": 1,
+        "m!": 4,
+        "n!d!s": 4,
+        "n!des": 4,
+        "nud!s": 4,
+        "nudes": 3,
         "pm": 2,
-        "deceptive-link": 2,
-        "hot-link": 2
+        "s!!": 4,
+        "sex": 3,
+        "some": 1,
+        "s!me": 4,
+        "s!m!": 4,
+        "som!": 4,
+        "today": 1,
+        "t!d!y": 4,
+        "w!nt": 4,
+        "want": 1,
+        "[non-ascii-chars]": 1,
+        "[deceptive-link]": 4,
+        "[hot-link]": 5
       }
       as $weights
       |(.data.user.logConnection.edges[0].node.post
@@ -2103,7 +2129,7 @@ _query() {
               ($text|startswith("http"))
               and (.modifiers.link.url|startswith($text)|not)
             then
-              "deceptive-link"
+              "[deceptive-link]"
             else
               empty
             end
@@ -2115,7 +2141,7 @@ _query() {
             |if
               ($text|startswith("http://hot"))
             then
-              "hot-link"
+              "[hot-link]"
             else
               empty
             end
@@ -2128,17 +2154,40 @@ _query() {
           |ascii_downcase
         ]
       end)
-      |flatten)
+      |flatten
+      |map(gsub("!"; ""))
+      |map(
+        split("")
+        |map(if . >= "\u007f" then "!" else . end)
+        |join("")
+      )
+      |if .|map(.|contains("!"))|any then .+["[non-ascii-chars]"] else . end
+      )
       as $words
-
-      |(reduce
-          $words[]
-          as $word
-          (0; .+$weights[$word]//0)
-        )
+      |($words|map(
+        $weights[.] as $weight
+        |if $weight
+         then
+          {"key": ., "value": $weight}
+         elif
+          .|match("^hot.*\\.com")
+         then
+          {"key": ., "value": 5}
+         elif
+           .|contains("!")
+         then
+          {"key": ., "value": 1}
+         else
+          {"key": ., "value": 0}
+         end)
+        |from_entries)
+      as $weighted_words
+      |(reduce $weighted_words[] as $w (0;.+$w))
       as $weight
-
-      |.analysis={"weight": $weight, "words": $words}
+      |.analysis={
+        "weight": $weight,
+        "weighted_words": $weighted_words
+      }
     '
   }
 
