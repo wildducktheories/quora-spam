@@ -1942,6 +1942,13 @@ _query() {
           last=null
           break
         fi
+        if test -z "$first" -a -z "$last"; then
+          count=0
+          first=null
+          last=null
+          break
+        fi
+
         if test -n "$first" -a -n "$last"; then
           break
         fi
