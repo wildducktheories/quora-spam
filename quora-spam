@@ -1310,7 +1310,7 @@ _filter() {
 
   _simple-profiles() {
     jq -c . \
-    | while read profile; do
+    | while read -r profile; do
         eval "$(echo "$profile" | _ju pipe 'select profileUrl|to env')"
         jq -cs ".[0]*.[1]" <(echo "$profile") <(_query simple-profile "$profileUrl");
     done
@@ -1903,7 +1903,7 @@ _process() {
   test -n "$selector" || die "process {selector}"
 
   _explode-adult-dating() {
-    _query explode-adult-dating | while read profile; do
+    _query explode-adult-dating | while read -r profile; do
       eval "$(echo "$profile" | _ju pipe 'select uid,isBlockedByViewer,profileUrl,activity_summary|to env')"
       if test "$isBlockedByViewer" = "false"; then
         _post block $uid
@@ -1989,7 +1989,7 @@ _query() {
       | while read url; do _query simple-shares "$url"; done \
       | jq -r .profiles[] \
       | while read profileUrl; do _query simple-profile "$profileUrl"; done \
-      | while read profile; do
+      | while read -r profile; do
         local uid=$(echo "$profile" | jq -r ".uid")
         if test -n "$uid"; then
           _cache exec _query activity-summary "$uid" | jq -cs "$profile*.[0]";
