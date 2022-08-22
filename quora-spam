@@ -1285,7 +1285,8 @@ _filter() {
   _simple-activity() {
     local bias=${1:--1}
     jq --argjson bias "$bias" '
-      [.data.user.activityConnection.edges[].node as $node
+      if .data.user|not then empty else . end
+      |[.data.user.activityConnection.edges[].node as $node
       |$node.feedReason
       |select(.__isFeedReason=="UserUpvotedAnswerReason")
       |.uid=.userNames[0].uid
@@ -1293,7 +1294,7 @@ _filter() {
       |.profileUrl=.userNames[0].profileUrl
       |.text=($node.answer.question.title|fromjson|.sections[]|.spans[0].text)][$bias]
     ' \
-    | _ju select 'uid,url,text,timestamp,profileUrl'
+    | _ju select 'uid,url,text,timestamp,profileUrl' || die "filter simple-activity: failed"
   }
 
   _simple-notifications() {
