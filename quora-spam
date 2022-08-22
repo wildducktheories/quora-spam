@@ -1096,8 +1096,8 @@ _file-profile-report() {
     test -n "$uid" || die "file-profile-report: usage: ... {profileUrl}"
 
     title="profile: ($profile, $uid)"
-    activity="$(quora-spam query activity-summary $uid)"
-    others="$(CACHE_BUST=${CACHE_BUST:-true} _cache exec quora-spam query $others \
+    activity="$(_query activity-summary $uid)"
+    others="$(CACHE_BUST=${CACHE_BUST:-true} _cache exec _query $others \
           | jq \
               -sc \
               --arg 'profile' "$profile" \
